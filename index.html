@@ -485,6 +485,7 @@ var BOSSES=[
 
 // ── Game state ──
 var running=false,paused=false,gmode='single',bdiff='normal',retryFn=null;
+var godMode=false,godFrenzy=0,godMeteorTimer=0;
 var fr=0,score=0,wave=1,lives=3;
 var _sin1=0,_sin2=0,_sin3=0;
 var grazeCount=0,grazeChain=0,grazeTimer=0;
@@ -840,12 +841,14 @@ function spawnWave(w){
   var n=Math.min(4+w*2,26);
   n=Math.min(34,Math.floor(n*contractMods.enemyCount));
   if(gmode==='arcade')n=Math.min(42,Math.floor(n*1.35)+1);
+  if(gmode==='god')n=Math.min(54,Math.floor(n*1.7)+3);
   var pool=w<3?['basic']:w<5?['basic','fast']:w<7?['basic','fast','tank']:
     w<10?['basic','fast','tank','bomber','sniper']:w<14?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2']:w<20?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2','berserker','mine']:Object.keys(ET);
   for(var i=0;i<n;i++){
     var tk=pool[Math.floor(Math.random()*pool.length)];var t=ET[tk];
     var _ws=1+Math.max(0,w-10)*.04;// wave10以降: 毎wave4%強化
     if(gmode==='arcade')_ws*=1.12;
+    if(gmode==='god')_ws*=1.28;
     enemies.push({type:tk,x:30+Math.random()*(W-60),y:18+Math.random()*(H*.38),
       vx:(Math.random()-.5)*t.spd*Math.min(_ws,2)*contractMods.enemySpd,vy:0,r:t.r,hp:Math.ceil(t.hp*_ws),maxHp:Math.ceil(t.hp*_ws),pts:Math.floor(t.pts*_ws),spd:t.spd*Math.min(_ws,1.8)*contractMods.enemySpd,
       srate:t.srate,bsp:t.bsp*contractMods.enemyBullet,col:t.col,em:t.em,beh:t.beh,alive:true,flash:0,
@@ -895,7 +898,50 @@ function spawnWave(w){
     else if(_ar<.68){addEffect('chain',360);addFloat(W/2,H*.14,'⛓ ARCADE BOOST: CHAIN','#ffd60a',1.1);}
     else{shields=Math.min(6,shields+1);addFloat(W/2,H*.14,'🛡 ARCADE BOOST: SHIELD +1','#ffd60a',1.1);}
   }
+  if(gmode==='god'){
+    addEffect('rapid',420);addEffect('chain',420);addEffect('magnet',300);
+    if(Math.random()<.55)addEffect('clone',360);
+    shields=Math.min(10,shields+2);
+    addFloat(W/2,H*.14,'👑 GOD WAVE: OVERBLESSED','#c084fc',1.4);
+  }
   checkUnlocks();document.getElementById('h-wv').textContent=w;
+}
+
+function triggerGodJudgement(){
+  if(gmode!=='god')return;
+  var cleared=0;
+  for(var i=0;i<enemies.length;i++){
+    var e=enemies[i];if(!e.alive)continue;
+    if(Math.random()<.4){e.hp-=9999;e.flash=12;if(e.hp<=0){e.alive=false;cleared++;spawnParts(e.x,e.y,'#ffd60a',10);}}
+    else{e.hp-=6;e.flash=8;spawnParts(e.x,e.y,'#c084fc',4);}
+  }
+  if(cleared>0){
+    var gain=cleared*35;
+    score+=gain;GEM+=Math.ceil(cleared*1.5);saveAll();
+    addFloat(W/2,H*.2,'⚡ JUDGEMENT '+cleared+' KILLS!','#ffd60a',1.6);
+  }
+  if(bossAlive){bossHP=Math.max(0,bossHP-bossMaxHP*.06);bossFlash=18;if(bossHP<=0){killBoss();return;}}
+  sf(255,214,10,.28);shake(10);SFX.ulti();
+}
+
+function updateGodMode(){
+  if(gmode!=='god'||!running||paused)return;
+  if(godFrenzy>0)godFrenzy--;
+  if(fr%220===0){
+    godFrenzy=200;
+    addEffect('rage',220);addEffect('homing',220);addEffect('rapid',220);
+    addFloat(W/2,H*.28,'🌌 GOD FRENZY','#ff2d55',1.6);
+    SFX.fever();
+  }
+  godMeteorTimer--;
+  if(godMeteorTimer<=0){
+    godMeteorTimer=32+Math.floor(Math.random()*18);
+    var tx=20+Math.random()*(W-40),ty=25+Math.random()*(H*.5);
+    spawnRing(tx,ty,'#ffd60a',55,3);spawnParts(tx,ty,'#ff9500',12);
+    for(var i=0;i<enemies.length;i++){var e=enemies[i];if(e.alive&&Math.hypot(e.x-tx,e.y-ty)<60){e.hp-=8;e.flash=8;if(e.hp<=0)e.alive=false;}}
+    if(bossAlive&&Math.hypot(bossX-tx,bossY-ty)<95){bossHP=Math.max(0,bossHP-3);bossFlash=10;if(bossHP<=0){killBoss();return;}}
+  }
+  if(fr%500===0)triggerGodJudgement();
 }
 
 // ── Kill boss ──
@@ -2293,6 +2339,7 @@ function loop(t){
     if(chaosTimer<=0)endChaos();
   }
   updateKillStreak();
+  updateGodMode();
   updatePlayer();
   moveBullets(pBullets,true);moveBullets(eBullets,false);moveBullets(botBullets,false);
   if(gmode!=='bot'){updateEnemies();updateBoss();trySpawnElite();checkBossRage();tryWaveEvent();updateMagnet();
@@ -2346,6 +2393,7 @@ function baseInit(){
   berserkTimer=0;mirrorShield=0;
   blackholes=[];revengeMeter=0;revengeFull=false;
   scoreMult=1;TOTALKILLS=parseInt(lsG('bwx_kills')||'0');
+  godMode=(gmode==='god');godFrenzy=0;godMeteorTimer=50;
   if(SKILLS&&SKILLS.length)SKILLS.forEach(function(sk){sk.cool=0;});
   var ff=document.getElementById('feverfill');if(ff)ff.style.width='0%';
   var fl=document.getElementById('feverlbl');if(fl)fl.style.opacity='0';
@@ -2369,6 +2417,19 @@ function startArcade(){
   renderWbar();renderSkillBar();hideOv();
   addEffect('rapid',480);addEffect('scorex3',240);
   addFloat(W/2,H*.3,'🎰 ARCADE MODE START!','#ffd60a',1.8);
+  spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
+}
+function startGod(){
+  SFX.sel();gmode='god';retryFn=startGod;
+  resize();baseInit();
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderWbar();renderSkillBar();hideOv();
+  lives=9;pHP=pMaxHP;shields=9;
+  ['rapid','chain','magnet','homing'].forEach(function(k){addEffect(k,540);});
+  addFloat(W/2,H*.3,'👑 GOD MODE ASCENSION','#ffd60a',2.2);
+  sf(255,214,10,.28);shake(12);
   spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
 }
 function startBossRush(){
@@ -2598,6 +2659,8 @@ function showMenu(){
       '<div><div>シングルプレイ</div><div style="font-size:7px;opacity:.3;margin-top:1px;">無限ウェーブ・ボス・ウェーブガチャ・レベルアップ</div></div></button>'+
     '<button class="btn" style="border-color:#ffd60a;color:#ffd60a;background:rgba(255,214,10,.08);" onclick="startArcade()"><span class="em">🎰</span>'+
       '<div><div>ARCADE モード</div><div style="font-size:7px;opacity:.45;margin-top:1px;">敵増量・毎WAVEランダム強化・報酬💎アップ</div></div></button>'+
+    '<button class="btn" style="border-color:#ff2d55;color:#ff2d55;background:rgba(255,45,85,.1);" onclick="startGod()"><span class="em">👑</span>'+
+      '<div><div>GOD GAME</div><div style="font-size:7px;opacity:.55;margin-top:1px;">激変モード：神罰・メテオ・常時ブースト</div></div></button>'+
     '<button class="btn c2" onclick="showDiff()"><span class="em">🤖</span>'+
       '<div><div>ボット対戦</div><div style="font-size:7px;opacity:.3;margin-top:1px;">AIと1vs1対決</div></div></button>'+
     '<button class="btn c2" onclick="startBossRush()"><span class="em">☠</span>'+
