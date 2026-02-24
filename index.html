@@ -106,6 +106,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Or
       <div class="hi"><div class="hl">WAVE</div><div class="hv" id="h-wv">1</div></div>
       <div class="hi"><div class="hl">LV</div><div class="hv p" id="h-lv">1</div></div>
       <div class="hi"><div class="hl">LIVES</div><div class="hv r" id="h-li">❤❤❤</div></div>
+      <div class="hi"><div class="hl">GRAZE</div><div class="hv" id="h-gr">0</div></div>
       <div class="hi"><div class="hl">💎</div><div class="hv g" id="h-gm">0</div></div>
     </div>
     <div style="display:flex;gap:4px;align-items:center;">
@@ -120,6 +121,11 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Or
   <div id="feverbar" style="width:100%;max-width:580px;height:4px;background:rgba(255,255,255,.04);flex-shrink:0;position:relative;">
     <div id="feverfill" style="height:100%;background:linear-gradient(90deg,#ff2d55,#ffd60a,#00ffe7);width:0%;position:relative;transition:width .1s;">
       <span id="feverlbl" style="position:absolute;right:2px;top:-10px;font-size:6px;letter-spacing:2px;color:#ffd60a;opacity:0;font-family:Orbitron,monospace;">FEVER READY!</span>
+    </div>
+  </div>
+  <div id="chaosbar" style="width:100%;max-width:580px;height:4px;background:rgba(255,255,255,.04);flex-shrink:0;position:relative;">
+    <div id="chaosfill" style="height:100%;background:linear-gradient(90deg,#a855f7,#ff2d55,#ffd60a);width:0%;position:relative;transition:width .1s;">
+      <span id="chaoslbl" style="position:absolute;right:2px;top:-10px;font-size:6px;letter-spacing:2px;color:#ff2d55;opacity:.3;font-family:Orbitron,monospace;">CHAOS</span>
     </div>
   </div>
   <div id="xpbar" style="width:100%;max-width:580px;height:2px;background:rgba(192,132,252,.1);flex-shrink:0;"><div id="xpfill" style="height:100%;background:#c084fc;transition:width .2s;width:0%"></div></div>
@@ -212,6 +218,14 @@ var bgmT=null,bgmBeat=0,bgmActive=false,bgmFeverMode=false,bgmBossMode=false;
 var BGM_PENTA=[220,261.6,293.7,329.6,392.0];
 var BGM_CHORDS=[[220,261.6,329.6],[196,246.9,293.7],[174.6,220,261.6],[185,220,277.2]];// Am Gm F Gm
 var BGM_BPM=105;
+var bgmStyle=lsG('bwx_bgmstyle')||'cyber';
+function bgmStyleLabel(){return bgmStyle==='dnb'?'DNB RUSH':bgmStyle==='ambient'?'AMBIENT VOID':'CYBER ARCADE';}
+function cycleBGMStyle(){
+  bgmStyle=bgmStyle==='cyber'?'dnb':bgmStyle==='dnb'?'ambient':'cyber';
+  lsS('bwx_bgmstyle',bgmStyle);
+  addFloat(W/2,H*.25,'🎵 '+bgmStyleLabel(),'#00ffe7',1.2);
+  if(running&&!paused)startBGM();
+}
 function bgmNote(hz,wt,dur,vol,dl){
   var ac=getAC();if(!ac)return;
   try{var o=ac.createOscillator(),g=ac.createGain();
@@ -225,7 +239,9 @@ function bgmNote(hz,wt,dur,vol,dl){
 function bgmTick(){
   if(!bgmActive){bgmT=null;return;}
   var bpm=bgmFeverMode?(BGM_BPM+wave*1.8+40):bgmBossMode?(BGM_BPM+20):(BGM_BPM+wave*1.2);
-  bpm=Math.min(bpm,165);
+  if(bgmStyle==='dnb')bpm+=38;
+  if(bgmStyle==='ambient')bpm-=28;
+  bpm=Math.min(Math.max(72,bpm),190);
   var step=60000/bpm/4;// 16th note ms
   var b16=bgmBeat%16,bar=Math.floor(bgmBeat/16)%4;
   var chord=BGM_CHORDS[bar];
@@ -242,7 +258,7 @@ function bgmTick(){
     bgmNote(350,'square',.025,.06,.008);
   }
   // ──HI-HAT──
-  if(bgmFeverMode||(b16%2===1)){
+  if(bgmStyle==='dnb'||bgmFeverMode||(b16%2===1)){
     var ac2=getAC();if(ac2)try{
       var buf=ac2.createBuffer(1,512,ac2.sampleRate);
       var d=buf.getChannelData(0);for(var i=0;i<512;i++)d[i]=(Math.random()*2-1);
@@ -267,13 +283,14 @@ function bgmTick(){
   }
 
   // ──MELODY──
-  var mplay=bgmFeverMode?(b16%2===0):(b16%4===0);
+  var mplay=bgmStyle==='ambient'?(b16%8===0):(bgmFeverMode?(b16%2===0):(b16%4===0));
   if(mplay){
     var pIdx=Math.floor(Math.random()*BGM_PENTA.length);
     var oct=bgmFeverMode?(Math.random()<.4?4:2):2;
     var mf=BGM_PENTA[pIdx]*oct;
     var mv=bgmFeverMode?.048:.028;
-    bgmNote(mf,bgmBossMode?'sawtooth':'triangle',.14,mv);
+    var waveType=bgmStyle==='ambient'?'sine':(bgmStyle==='dnb'?'square':(bgmBossMode?'sawtooth':'triangle'));
+    bgmNote(mf,waveType,bgmStyle==='ambient'?.22:.14,mv*(bgmStyle==='ambient'?0.8:1));
     if(bgmFeverMode&&Math.random()<.4){
       bgmNote(mf*1.498,'triangle',.1,mv*.5,.015);// perfect 5th
     }
@@ -407,8 +424,8 @@ var WEAPONS=[
      return shots;
    }}
 ];
-function spd(){return (effects.rapid>0?14:9)*(berserkTimer>0?1.4:1)*(feverActive?1.3:1)*(1+getU('fire')*.05)*(1+getSkinBonus('fp'));}
-function dmg(){var lastStand=lives<=0&&pHP<=pMaxHP*.12?1.8:1;return (1+getU('power')*.4)*(berserkTimer>0?2.2:1)*(feverActive?1.5:1)*(hyperMode?1.5:1)*lastStand*(1+getSkinBonus('dp'));}
+function spd(){return (effects.rapid>0?14:9)*(berserkTimer>0?1.4:1)*(feverActive?1.3:1)*(1+getU('fire')*.05)*(1+getSkinBonus('fp'))*relics.fireMul;}
+function dmg(){var lastStand=lives<=0&&pHP<=pMaxHP*.12?1.8:1;return (1+getU('power')*.4)*(berserkTimer>0?2.2:1)*(feverActive?1.5:1)*(hyperMode?1.5:1)*lastStand*(1+getSkinBonus('dp'))*relics.dmgMul;}
 function col(c){return c||WEAPONS[curWeapon].col;}
 function mkB(x,y,a,sp,col,r,dmg,pierce,explode){
   return {x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:r,col:col,dmg:dmg,pierce:pierce,explode:explode||false,trail:[],age:0};
@@ -470,7 +487,13 @@ var BOSSES=[
 var running=false,paused=false,gmode='single',bdiff='normal',retryFn=null;
 var fr=0,score=0,wave=1,lives=3;
 var _sin1=0,_sin2=0,_sin3=0;
+var grazeCount=0,grazeChain=0,grazeTimer=0;
 var playerLv=1,xp=0,xpNeeded=100;
+var activeContract=null,nextContract=null;
+var contractMods={enemySpd:1,enemyBullet:1,enemyCount:1,waveGemMul:1,killGemBonus:0,fragile:0,startBoost:false};
+var relics={fireMul:1,dmgMul:1,moveMul:1,gemMul:1,shieldWave:0,lifesteal:0,critBoost:0};
+var relicTakenWave=0;
+var chaos=0,CMAX=100,chaosActive=false,chaosTimer=0,chaosPrevStyle='cyber';
 var px=0,py=0,pvx=0,pvy=0,destX=0,destY=0,moving=false,pAngle=0,PSPD=3.3;
 var pTrail=[];
 var iframes=0,dashCool=0,dashActive=0;
@@ -610,12 +633,77 @@ function doUlti(){
   for(var _ubi=0;_ubi<eBullets.length;_ubi++){eBullets[_ubi].vx=0;eBullets[_ubi].vy=0;}
   setTimeout(function(){if(running)eBullets=[];},1000);
 }
+var CONTRACTS=[
+  {id:'overclock',em:'⚡',name:'OVERCLOCK',col:'#ff2d55',
+    good:'次WAVE報酬💎×2',bad:'敵速度+25% / 弾速+25%',
+    mods:{enemySpd:1.25,enemyBullet:1.25,enemyCount:1,waveGemMul:2,killGemBonus:0,fragile:0,startBoost:false}},
+  {id:'swarm',em:'🪲',name:'SWARM',col:'#ffd60a',
+    good:'撃破ごと💎+1',bad:'敵数+45%',
+    mods:{enemySpd:1,enemyBullet:1,enemyCount:1.45,waveGemMul:1,killGemBonus:1,fragile:0,startBoost:false}},
+  {id:'blood',em:'🩸',name:'BLOOD RUSH',col:'#c084fc',
+    good:'開幕BOMB/ULTI/FEVER MAX',bad:'被弾ダメージ+1',
+    mods:{enemySpd:1,enemyBullet:1,enemyCount:1,waveGemMul:1.35,killGemBonus:0,fragile:1,startBoost:true}}
+];
+
+function setContract(c){
+  activeContract=c||null;
+  contractMods=activeContract?activeContract.mods:{enemySpd:1,enemyBullet:1,enemyCount:1,waveGemMul:1,killGemBonus:0,fragile:0,startBoost:false};
+  if(activeContract&&contractMods.startBoost){
+    bcharge=BMAX;ucharge=UMAX;fever=FMAX;
+    var ff=document.getElementById('feverfill');if(ff)ff.style.width='100%';
+    var fl=document.getElementById('feverlbl');if(fl)fl.style.opacity='1';
+    addFloat(W/2,H*.3,'CONTRACT BOOST!','#ffd60a',1.5);
+  }
+}
+
+function addChaos(n){
+  if(chaosActive)return;
+  chaos=Math.min(CMAX,chaos+n);
+  var pct=chaos/CMAX*100;
+  var cf=document.getElementById('chaosfill');if(cf)cf.style.width=pct+'%';
+  var cl=document.getElementById('chaoslbl');if(cl)cl.style.opacity=chaos>=CMAX?'1':'.3';
+  if(chaos>=CMAX)addFloat(W/2,H*.52,'💀 CHAOS READY! (C)','#ff2d55',1.4);
+}
+function triggerChaos(){
+  if(chaosActive||chaos<CMAX)return;
+  chaosActive=true;chaosTimer=720;chaos=0;
+  var cf=document.getElementById('chaosfill');if(cf)cf.style.width='0%';
+  var cl=document.getElementById('chaoslbl');if(cl){cl.style.opacity='1';cl.textContent='CHAOS ACTIVE!';}
+  chaosPrevStyle=bgmStyle;bgmStyle='dnb';if(running&&!paused)startBGM();
+  sf(255,45,85,.42);shake(14);SFX.revenge&&SFX.revenge();
+  addFloat(W/2,H*.34,'☠ CHAOS OVERDRIVE ☠','#ff2d55',2.1);
+}
+function endChaos(){
+  chaosActive=false;chaosTimer=0;
+  var cl=document.getElementById('chaoslbl');if(cl){cl.style.opacity='.3';cl.textContent='CHAOS';}
+  bgmStyle=chaosPrevStyle||bgmStyle;
+  if(running&&!paused)startBGM();
+}
+
 function hud(){
   document.getElementById('h-sc').textContent=score.toLocaleString();
   document.getElementById('h-wv').textContent=bossAlive?'BOSS':wave;
   var l=Math.max(0,lives);
   document.getElementById('h-li').textContent='❤'.repeat(Math.min(l,8))+(l<=0?'💀':'');
+  document.getElementById('h-gr').textContent=grazeCount;
   document.getElementById('h-gm').textContent=GEM;
+}
+
+function onGraze(){
+  grazeCount++;grazeChain++;grazeTimer=70;
+  var bonus=Math.min(12,2+Math.floor(grazeChain/3));
+  score+=bonus*scoreMult;
+  bcharge=Math.min(BMAX,bcharge+2);
+  ucharge=Math.min(UMAX,ucharge+1);
+  addFever(2);addChaos(1.5);
+  if(grazeChain%8===0){
+    GEM+=2;saveAll();
+    addFloat(px,py-18,'NEAR MISS x'+grazeChain+' +2💎','#ffd60a',1.1);
+    SFX.crit();
+  }else if(grazeChain%3===0){
+    addFloat(px,py-12,'GRAZE x'+grazeChain,'#00ffe7',.95);
+  }
+  hud();
 }
 
 // ── Input ──
@@ -638,16 +726,11 @@ document.addEventListener('keydown',function(e){
   if(e.code==='Escape')doPause();
   if(e.code==='KeyR')doRevenge();
   if(e.code==='KeyF'){if(fever>=FMAX&&!feverActive)triggerFever();}
-  if(e.code==='Tab'){e.preventDefault();activeSkill=(activeSkill+1)%SKILLS.length;renderSkillBar();}
+  if(e.code==='KeyC'){e.preventDefault();triggerChaos();}
+  if(e.code==='Tab'&&SKILLS.length){e.preventDefault();activeSkill=(activeSkill+1)%SKILLS.length;renderSkillBar();}
   if(e.code==='KeyA')useSkill((activeSkill+SKILLS.length-1)%SKILLS.length);
   if(e.code==='KeyS')useSkill(activeSkill);
   if(e.code==='KeyD')useSkill((activeSkill+1)%SKILLS.length);
-  if(e.code==='KeyR')doRevenge();
-  if(e.code==='Tab'){e.preventDefault();activeSkill=(activeSkill+1)%SKILLS.length;renderSkillBar();}
-  if(e.code==='KeyA')useSkill((activeSkill+SKILLS.length-1)%SKILLS.length);
-  if(e.code==='KeyS')useSkill(activeSkill);
-  if(e.code==='KeyD')useSkill((activeSkill+1)%SKILLS.length);
-  if(e.code==='KeyF'){if(fever>=FMAX&&!feverActive)triggerFever();}
   if(e.code==='KeyQ')nextWeapon();
   if(e.code==='KeyE')nextWeapon();
   for(var i=0;i<5;i++)if(e.code==='Digit'+(i+1))switchWeapon(i);
@@ -679,7 +762,7 @@ function doBomb(){
   if(!running||paused||bcharge<BMAX)return;
   bcharge=0;bflash=20;SFX.bomb();shake(14);sf(255,214,10,.35);
   var dmg2=5+getU('bomb')*4;var rad=110+getU('bomb')*25;
-  if(gmode==='single'){
+  if(gmode!=='bot'){
     if(bossAlive){bossHP=Math.max(0,bossHP-Math.ceil(bossMaxHP*.32));bossFlash=18;if(bossHP<=0){killBoss();return;}}
     for(var _bme=0;_bme<enemies.length;_bme++){var e=enemies[_bme];if(!e.alive)continue;
       var _bmdx=e.x-px,_bmdy=e.y-py;if(_bmdx*_bmdx+_bmdy*_bmdy<rad*rad){
@@ -691,7 +774,22 @@ function doBomb(){
 }
 
 // ── Enemy spawning ──
+function spawnBossRush(stage){
+  enemies=[];eBullets=[];boss=null;bossAlive=false;
+  var bi=(stage-1)%BOSSES.length,loop=Math.floor((stage-1)/BOSSES.length),base=BOSSES[bi];
+  var scl=1+loop*.45+stage*.06;
+  boss={wave:stage,name:base.name+' Ω'+(loop+1),em:base.em,r:base.r+Math.min(loop*2,12),hp:Math.floor(base.hp*scl),pts:Math.floor(base.pts*(1+loop*.35+stage*.08)),
+    col:base.col,bsp:base.bsp*(1+loop*.1),srate:Math.max(5,base.srate-loop),spread:Math.min(36,base.spread+loop*2),pattern:base.pattern};
+  bossAlive=true;bossX=W/2;bossY=H*.2;bossVX=1.2;bossVY=0;
+  bossHP=bossMaxHP=boss.hp;bossPhase=0;bossFlash=0;bossAngle=0;bossShootT=boss.srate;
+  SFX.boss();bgmBossMode=true;bgmFeverMode=false;
+  addFloat(W/2,H*.34,'☠ BOSS RUSH STAGE '+stage,'#ff2d55',1.9);
+  addFloat(W/2,H*.27,boss.em+' '+boss.name,boss.col,1.5);
+  document.getElementById('h-wv').textContent='BR'+stage;
+}
+
 function spawnWave(w){
+  if(gmode==='bossrush'){spawnBossRush(w);return;}
   enemies=[];eBullets=[];boss=null;bossAlive=false;
   for(var _ek in effects){if(_ek!=='chain')effects[_ek]=0;}// keep chain between waves
   var bossDef=null;for(var _bi=0;_bi<BOSSES.length;_bi++){if(BOSSES[_bi].wave===w){bossDef=BOSSES[_bi];break;}}
@@ -706,14 +804,15 @@ function spawnWave(w){
   var _wannCol=w%10===9?'#ff2d55':w>=30?'#ff6000':w>=20?'#ffd60a':'#00ffe7';
   addFloat(W/2,H*.42,_wann,_wannCol,1.4+Math.min(w*.05,0.8));
   var n=Math.min(4+w*2,26);
+  n=Math.min(34,Math.floor(n*contractMods.enemyCount));
   var pool=w<3?['basic']:w<5?['basic','fast']:w<7?['basic','fast','tank']:
     w<10?['basic','fast','tank','bomber','sniper']:w<14?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2']:w<20?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2','berserker','mine']:Object.keys(ET);
   for(var i=0;i<n;i++){
     var tk=pool[Math.floor(Math.random()*pool.length)];var t=ET[tk];
     var _ws=1+Math.max(0,w-10)*.04;// wave10以降: 毎wave4%強化
     enemies.push({type:tk,x:30+Math.random()*(W-60),y:18+Math.random()*(H*.38),
-      vx:(Math.random()-.5)*t.spd*Math.min(_ws,2),vy:0,r:t.r,hp:Math.ceil(t.hp*_ws),maxHp:Math.ceil(t.hp*_ws),pts:Math.floor(t.pts*_ws),spd:t.spd*Math.min(_ws,1.8),
-      srate:t.srate,bsp:t.bsp,col:t.col,em:t.em,beh:t.beh,alive:true,flash:0,
+      vx:(Math.random()-.5)*t.spd*Math.min(_ws,2)*contractMods.enemySpd,vy:0,r:t.r,hp:Math.ceil(t.hp*_ws),maxHp:Math.ceil(t.hp*_ws),pts:Math.floor(t.pts*_ws),spd:t.spd*Math.min(_ws,1.8)*contractMods.enemySpd,
+      srate:t.srate,bsp:t.bsp*contractMods.enemyBullet,col:t.col,em:t.em,beh:t.beh,alive:true,flash:0,
       angle:Math.random()*Math.PI*2,drift:Math.random()>.5?1:-1,driftT:40+Math.floor(Math.random()*70),
       st:Math.floor(Math.random()*t.srate),phaseT:0,splits:t.splits||false,zigDir:1,zigT:0});
   }
@@ -764,9 +863,10 @@ function killBoss(){
   waveClearing=true;// ← 先にフラグ。updateEnemies の wave++ をブロック
   wave++;           // ← ここで1回だけカウントアップ
   var mult=effects.scorex3>0?3:1;var pts=boss.pts*mult;score+=pts;
-  GEM+=80;saveAll();SFX.bexp();shake(24);sf(255,255,255,.4);
+  var bgem=gmode==='bossrush'?(120+wave*15):80;
+  GEM+=bgem;saveAll();SFX.bexp();shake(24);sf(255,255,255,.4);
   spawnParts(bossX,bossY,boss.col,25);
-  addFloat(bossX,bossY,'BOSS!! +'+pts+' 💎+80',boss.col,2);
+  addFloat(bossX,bossY,'BOSS!! +'+pts+' 💎+'+bgem,boss.col,2);
   spawnRing(bossX,bossY,boss.col,130,4);spawnRing(bossX,bossY,'#fff',80,2);
   addXP(boss.pts*.1);
   powerups.push({x:bossX-40,y:bossY,r:13,bob:0,type:'bomb'});
@@ -798,11 +898,11 @@ function updatePlayer(){
     if(bh.timer<=0)blackholes.splice(bhi,1);}
   if(dashActive>0){dashActive--;pvx*=.87;pvy*=.87;}
   else if(jA&&(Math.abs(jDx)>.05||Math.abs(jDy)>.05)){
-    PSPD=3.3+getU('speed')*.44+(effects.rage>0?.8:0);
+    PSPD=(3.3+getU('speed')*.44+(effects.rage>0?.8:0))*relics.moveMul;
     pvx=pvx*.7+jDx*PSPD*.3;pvy=pvy*.7+jDy*PSPD*.3;
     destX=px+jDx*80;destY=py+jDy*80;moving=true;
   }else if(moving){
-    PSPD=3.3+getU('speed')*.44+(effects.rage>0?.8:0);
+    PSPD=(3.3+getU('speed')*.44+(effects.rage>0?.8:0))*relics.moveMul;
     var dx=destX-px,dy=destY-py,d=Math.hypot(dx,dy);
     if(d>5){pvx=pvx*.72+(dx/d)*PSPD*.28;pvy=pvy*.72+(dy/d)*PSPD*.28;}
     else{pvx*=.7;pvy*=.7;moving=d>12;}
@@ -822,9 +922,10 @@ function updatePlayer(){
       e.vx+=dx/d*.4;e.vy+=dy/d*.2;}
   }
   if(shootCool>0)shootCool--;
-  var hasTgt=gmode==='single'?(bossAlive||enemies.some(function(e){return e.alive;})):true;
+  var hasTgt=gmode!=='bot'?(bossAlive||enemies.some(function(e){return e.alive;})):true;
   var frate=Math.max(2,WEAPONS[curWeapon].rate-Math.floor(getU('fire')*1.7));
   if(effects.rage>0)frate=Math.max(2,Math.floor(frate*.5));
+  if(chaosActive)frate=Math.max(1,Math.floor(frate*.45));
   if(hasTgt&&shootCool<=0){autoShoot();shootCool=frate;}
   if(fr%3===0&&bcharge<BMAX)bcharge=Math.min(BMAX,bcharge+.14);
   if(fr%4===0&&ucharge<UMAX)ucharge=Math.min(UMAX,ucharge+.08);
@@ -834,7 +935,7 @@ function updatePlayer(){
 }
 function autoShoot(){
   var tgt=null,bd=999999;
-  if(gmode==='single'){
+  if(gmode!=='bot'){
     if(bossAlive){tgt={x:bossX,y:bossY};}
     else{for(var _ati=0;_ati<enemies.length;_ati++){var _ae=enemies[_ati];if(!_ae.alive)continue;var _ad=Math.hypot(_ae.x-px,_ae.y-py);if(_ad<bd){bd=_ad;tgt=_ae;}}}
   }else tgt={x:botX,y:botY};
@@ -915,9 +1016,12 @@ function updateEnemies(){
     waveClearing=true;
     wave++;var wg=wave*7+12;
     var perfectBonus=waveHitCount===0?Math.floor(wave*5+20):0;
-    GEM+=wg+perfectBonus;saveAll();
-    if(perfectBonus>0){addFloat(W/2,H*.38,'✨ PERFECT! +'+perfectBonus+'💎','#ffd60a',1.8);SFX.lvup();}
-    addFloat(W/2,H*.44,'WAVE CLEAR! 💎+'+wg,'#00ffe7',1.7);
+    var cMul=contractMods.waveGemMul||1;
+    var rwg=Math.floor(wg*cMul*relics.gemMul),rpb=Math.floor(perfectBonus*cMul*relics.gemMul);
+    GEM+=rwg+rpb;saveAll();
+    if(rpb>0){addFloat(W/2,H*.38,'✨ PERFECT! +'+rpb+'💎','#ffd60a',1.8);SFX.lvup();}
+    addFloat(W/2,H*.44,'WAVE CLEAR! 💎+'+rwg+(cMul>1?' (CONTRACT×'+cMul+')':''),'#00ffe7',1.7);
+    if(activeContract){addFloat(W/2,H*.33,'CONTRACT CLEAR ✔ '+activeContract.name,activeContract.col,1.2);activeContract=null;setContract(null);}
     waveHitCount=0;waveStartScore=score;
     addXP(wave*15);SFX.wave();hud();
     setTimeout(function(){if(!running)return;showWaveGacha();},700);
@@ -946,7 +1050,7 @@ function updateBoss(){
     }
   }
   if(bossShootT<=0){
-    var bspd=boss.bsp*(effects.slow>0?.35:1)*(1+bossPhase*.3);
+    var bspd=boss.bsp*contractMods.enemyBullet*(effects.slow>0?.35:1)*(1+bossPhase*.3);
     var shots=boss.spread*(1+bossPhase),bA=Math.atan2(py-bossY,px-bossX);
     var pat=boss.pattern;
     if(pat==='arc'||pat==='all'){
@@ -1000,9 +1104,9 @@ function moveBullets(arr,homing){
 // ── Collision ──
 function collide(){
   var lk=getU('luck');
-  var critChance=.07+lk*.025;
+  var critChance=.07+lk*.025+relics.critBoost;
   var mult=effects.scorex3>0?3:1;
-  if(gmode==='single'){
+  if(gmode!=='bot'){
     // Player bullets → boss
     if(bossAlive){
       for(var bi=pBullets.length-1;bi>=0;bi--){
@@ -1050,8 +1154,10 @@ function collide(){
             }
           }
           if(e.hp<=0){
-            e.alive=false;var pts=Math.floor(e.pts*mult);score+=pts;
+            e.alive=false;var pts=Math.floor(e.pts*mult*(chaosActive?2:1));score+=pts;
             var gemEarn=e.elite?25:Math.max(1,(combo>=5?3:combo>=2?2:1)+(lk>0?1:0));
+            gemEarn+=contractMods.killGemBonus||0;
+            gemEarn=Math.max(1,Math.floor(gemEarn*relics.gemMul));
             GEM+=gemEarn;saveAll();
             spawnParts(e.x,e.y,e.col,10);spawnRing(e.x,e.y,e.col,e.r*4.5);
             addCombo();onKill();
@@ -1072,6 +1178,7 @@ function collide(){
                   angle:0,drift:1,driftT:30,st:40,phaseT:0,splits:false,zigDir:1,zigT:0});
               }
             }
+            if(relics.lifesteal>0&&Math.random()<relics.lifesteal&&lives<8){lives++;addFloat(px,py-16,'VAMP +1❤','#ff2d55',1);}
             TOTALKILLS++;hud();
           }
           if(!b.pierce)hit=true;break;
@@ -1084,13 +1191,15 @@ function collide(){
       for(var i=eBullets.length-1;i>=0;i--){
         var b=eBullets[i];if(dashActive>8)continue;
         if(b.x<0||b.x>W||b.y<0||b.y>H){eBullets.splice(i,1);continue;}
+        var _gdx=b.x-px,_gdy=b.y-py,_gHit=9+b.r,_gNear=_gHit+18,_gSq=_gdx*_gdx+_gdy*_gdy;
+        if(!b.grazed&&_gSq<_gNear*_gNear&&_gSq>_gHit*_gHit){b.grazed=true;onGraze();}
         var _edx=b.x-px,_edy=b.y-py,_er=9+b.r;if(_edx*_edx+_edy*_edy<_er*_er){
           if(shields>0){
             shields--;iframes=55;eBullets.splice(i,1);
             shake(4);spawnParts(px,py,'#60a5fa',18);SFX.shield();
             addFloat(px,py,'🛡 SHIELD!','#60a5fa',1.4);sf(96,165,250,.2);break;
           }
-          var armor=getU('armor');var dmgAmt=b.boss?2:1;
+          var armor=getU('armor');var dmgAmt=(b.boss?2:1)+(contractMods.fragile||0);
           if(armor>=1)dmgAmt=Math.max(1,dmgAmt-1);if(armor>=3&&!b.boss)dmgAmt=0;
           if(armor>=4)dmgAmt=0;
           if(dmgAmt===0){iframes=40;eBullets.splice(i,1);break;}
@@ -1964,6 +2073,7 @@ function onKill(){
     addFloat(W/2,H*.32,'⚡ STORM STRIKE!','#ffd60a',1.8);
     shake(6);sf(255,214,10,.2);
   }
+  addChaos(3);
   if(killStreakCount===5){addFloat(px,py,'STREAK 5！','#ffd60a',1.2);SFX.crit();}
   if(killStreakCount===10){GEM+=5;saveAll();addFloat(px,py,'STREAK 10! +5💎','#ff9500',1.6);SFX.chain();}
   if(killStreakCount===20){GEM+=15;saveAll();addFloat(px,py,'STREAK 20!! +15💎','#c084fc',2);SFX.bexp();}
@@ -2106,10 +2216,21 @@ function loop(t){
   if(!running||paused)return;
   fr++;_sin1=Math.sin(fr*.12);_sin2=Math.sin(fr*.2);_sin3=Math.sin(fr*.08);if(SKINS[curSkin]&&SKINS[curSkin].id==='void')_voidT=(fr*.016);
   if(hyperTimer>0){hyperTimer--;if(hyperTimer===0)hyperMode=false;}
+  if(grazeTimer>0){grazeTimer--;if(grazeTimer===0)grazeChain=0;}
+  if(chaosActive){
+    chaosTimer--;
+    if(fr%18===0){
+      var alive=enemies.filter(function(e){return e.alive;});
+      alive.sort(function(a,b){return Math.hypot(a.x-px,a.y-py)-Math.hypot(b.x-px,b.y-py);});
+      for(var _cz=0;_cz<Math.min(3,alive.length);_cz++){var ce=alive[_cz];ce.hp-=2.2;ce.flash=10;spawnParts(ce.x,ce.y,'#ff2d55',4);}
+      if(bossAlive){bossHP=Math.max(0,bossHP-1.2);bossFlash=8;if(bossHP<=0){killBoss();return;}}
+    }
+    if(chaosTimer<=0)endChaos();
+  }
   updateKillStreak();
   updatePlayer();
   moveBullets(pBullets,true);moveBullets(eBullets,false);moveBullets(botBullets,false);
-  if(gmode==='single'){updateEnemies();updateBoss();trySpawnElite();checkBossRage();tryWaveEvent();updateMagnet();}
+  if(gmode!=='bot'){updateEnemies();updateBoss();trySpawnElite();checkBossRage();tryWaveEvent();updateMagnet();}
   if(gmode==='bot')updateBot();
   for(var _pi=parts.length-1;_pi>=0;_pi--){var _p=parts[_pi];_p.x+=_p.vx;_p.y+=_p.vy;_p.vy+=.09;_p.vx*=.97;_p.life-=_p.dec;if(_p.life<=0){parts[_pi]=parts[parts.length-1];parts.pop();}}
   if(parts.length>80)parts.length=80;
@@ -2119,7 +2240,7 @@ function loop(t){
   collide();
   ctx.save();ctx.translate(shakeX,shakeY);
   drawArena();drawParticles();
-  if(gmode==='single'){drawEnemies();drawBoss();}
+  if(gmode!=='bot'){drawEnemies();drawBoss();}
   if(gmode==='bot')drawShip(botX,botY,botAngle,'#ff2d55',true,false,false,0);
   drawBullets(eBullets);drawBullets(botBullets);drawBulletsNonPierce(pBullets);drawLaserBullets();
   drawPlayer();drawHUD2();
@@ -2131,6 +2252,9 @@ function loop(t){
 function baseInit(){
   try{getAC();}catch(e){}
   fr=0;score=0;wave=1;lives=3;playerLv=1;xp=0;xpNeeded=100;
+  grazeCount=0;grazeChain=0;grazeTimer=0;activeContract=null;nextContract=null;setContract(null);
+  relics={fireMul:1,dmgMul:1,moveMul:1,gemMul:1,shieldWave:0,lifesteal:0,critBoost:0};relicTakenWave=0;
+  chaos=0;chaosActive=false;chaosTimer=0;chaosPrevStyle=bgmStyle;var cf=document.getElementById('chaosfill');if(cf)cf.style.width='0%';var cl=document.getElementById('chaoslbl');if(cl){cl.style.opacity='.3';cl.textContent='CHAOS';}
   iframes=0;bcharge=0;bflash=0;ucharge=0;shootCool=0;dashCool=0;dashActive=0;shakeAmt=0;
   pBullets=[];eBullets=[];botBullets=[];parts=[];floats=[];rings=[];powerups=[];
   enemies=[];boss=null;bossAlive=false;pTrail=[];afterImgs=[];combo=0;comboT=0;
@@ -2166,6 +2290,14 @@ function startSingle(){
   var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
   renderWbar();renderSkillBar();hideOv();spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
 }
+function startBossRush(){
+  SFX.sel();gmode='bossrush';retryFn=startBossRush;
+  resize();baseInit();
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderWbar();renderSkillBar();hideOv();wave=1;spawnWave(wave);startBGM();raf=requestAnimationFrame(loop);
+}
 function startBot(diff){
   SFX.sel();gmode='bot';bdiff=diff;retryFn=function(){startBot(diff);};
   var c=BC[diff];resize();baseInit();
@@ -2191,6 +2323,7 @@ function doPause(){
     '<div class="pt" style="color:#00ffe7;">PAUSED</div>'+
     '<button class="btn c1" onclick="resume()" style="width:100%;justify-content:center;">▶ 再開</button>'+
     '<button class="btn c4" onclick="openShop()" style="width:100%;justify-content:center;">⚙ ショップ</button>'+
+    '<button class="btn c3" onclick="cycleBGMStyle()" style="width:100%;justify-content:center;">🎵 '+bgmStyleLabel()+'</button>'+
     '<button class="btn c2" onclick="goMenu()" style="width:100%;justify-content:center;">🏠 メニュー</button>');}
   else resume();
 }
@@ -2202,7 +2335,7 @@ function goMenu(){running=false;stopBGM();cancelAnimationFrame(raf);
 function openShop(){if(running&&!paused){paused=true;stopBGM();}showShop();}
 
 // ── Wave gacha ──
-function showWaveGacha(){streak++;saveStreak();var sbon=streak>=7?25:streak>=3?10:streak>=1?3:0;if(sbon>0){GEM+=sbon;addFloat(W/2,H*.55,streak+'日連続! +'+sbon+'💎','#ffd60a',1.5);saveAll();}
+function showWaveGacha(skipDaily){if(!skipDaily){streak++;saveStreak();var sbon=streak>=7?25:streak>=3?10:streak>=1?3:0;if(sbon>0){GEM+=sbon;addFloat(W/2,H*.55,streak+'日連続! +'+sbon+'💎','#ffd60a',1.5);saveAll();}}
   if(!running)return;paused=true;stopBGM();
   var lk=getU('luck');
   function pick(ex){
@@ -2233,6 +2366,8 @@ function showWaveGacha(){streak++;saveStreak();var sbon=streak>=7?25:streak>=3?1
     '<div class="brow">'+
       '<span style="font-size:9px;color:rgba(255,214,10,.5);">💎'+GEM+'</span>'+
       '<button class="sb y" onclick="doGacha()">🎰 ガチャ ('+GCOST+'💎)</button>'+
+      '<button class="sb p" onclick="showContracts()">☠ 契約</button>'+
+      '<button class="sb y" onclick="showArtifacts()">🧬 遺物</button>'+
       '<button class="sb c" onclick="skipCard()">スキップ</button>'+
     '</div>'
   );
@@ -2250,6 +2385,66 @@ function pickCard(i){
     '</div>'
   );
 }
+
+function showContracts(){
+  if(nextContract){addFloat(W/2,H*.48,'契約は1WAVEに1回まで','#ff2d55',1.1);return;}
+  var picks=[];
+  while(picks.length<3){
+    var c=CONTRACTS[Math.floor(Math.random()*CONTRACTS.length)];
+    if(picks.indexOf(c)<0)picks.push(c);
+  }
+  window._contracts=picks;
+  var h='<div class="pt" style="color:#ff2d55;font-size:14px;">☠ RISK CONTRACT</div>'+
+    '<div class="ps">次WAVE限定。強い報酬か、重い代償か。</div><div class="sp"></div><div class="cards">';
+  picks.forEach(function(c,i){
+    h+='<div class="card" style="border-color:'+c.col+';color:'+c.col+';" onclick="pickContract('+i+')">'+
+      '<div class="cem">'+c.em+'</div><div class="cname">'+c.name+'</div>'+
+      '<div class="cdesc" style="opacity:.8">'+c.good+'</div><div class="cdesc" style="color:#ff2d55;opacity:.85">'+c.bad+'</div></div>';
+  });
+  h+='</div><div class="sp"></div><button class="sb c" onclick="showWaveGacha(true)">戻る</button>';
+  showPanel(h);
+}
+function pickContract(i){
+  var list=window._contracts||[];var c=list[i];if(!c)return;
+  nextContract=c;
+  SFX.revenge&&SFX.revenge();
+  showPanel(
+    '<div class="pt" style="color:'+c.col+'">'+c.em+' '+c.name+'</div>'+
+    '<div class="ps">'+c.good+'</div><div class="ps" style="color:#ff2d55">'+c.bad+'</div><div class="sp"></div>'+
+    '<button class="sb c" onclick="continueWave()">契約して進む ▶</button>'
+  );
+}
+
+var ARTIFACTS=[
+  {id:'turbo',em:'⚙',name:'TURBO CORE',col:'#00ffe7',good:'連射+20% 移動+10%',fn:function(){relics.fireMul*=1.2;relics.moveMul*=1.1;}},
+  {id:'fortune',em:'💰',name:'FORTUNE CHIP',col:'#ffd60a',good:'獲得💎+30%',fn:function(){relics.gemMul*=1.3;}},
+  {id:'vamp',em:'🩸',name:'VAMP LENS',col:'#ff2d55',good:'撃破時12%で❤+1',fn:function(){relics.lifesteal=Math.min(.35,relics.lifesteal+.12);}},
+  {id:'crit',em:'🎯',name:'ASSASSIN EYE',col:'#c084fc',good:'CRIT率+8%',fn:function(){relics.critBoost=Math.min(.35,relics.critBoost+.08);}},
+  {id:'shield',em:'🛡',name:'AEGIS LOOP',col:'#60a5fa',good:'各WAVE開始時シールド+1',fn:function(){relics.shieldWave=Math.min(3,relics.shieldWave+1);}},
+  {id:'rage',em:'🔥',name:'BERSERK GEAR',col:'#ff6000',good:'与ダメ+28% 連射+10%',fn:function(){relics.dmgMul*=1.28;relics.fireMul*=1.1;}}
+];
+function showArtifacts(){
+  if(relicTakenWave===wave){addFloat(W/2,H*.48,'このWAVEは取得済み','#ff2d55',1.1);return;}
+  var picks=[];
+  while(picks.length<3){var a=ARTIFACTS[Math.floor(Math.random()*ARTIFACTS.length)];if(picks.indexOf(a)<0)picks.push(a);}
+  window._artifacts=picks;
+  var h='<div class="pt" style="color:#00ffe7;font-size:14px;">🧬 ARTIFACT DRAFT</div>'+
+    '<div class="ps">ラン中永続。1WAVEにつき1個だけ。</div><div class="sp"></div><div class="cards">';
+  picks.forEach(function(a,i){
+    h+='<div class="card" style="border-color:'+a.col+';color:'+a.col+';" onclick="pickArtifact('+i+')">'+
+      '<div class="cem">'+a.em+'</div><div class="cname">'+a.name+'</div><div class="cdesc" style="opacity:.8">'+a.good+'</div></div>';
+  });
+  h+='</div><div class="sp"></div><button class="sb c" onclick="showWaveGacha(true)">戻る</button>';
+  showPanel(h);
+}
+function pickArtifact(i){
+  var list=window._artifacts||[];var a=list[i];if(!a)return;
+  relicTakenWave=wave;
+  try{a.fn();}catch(e){}
+  SFX.upg();
+  showPanel('<div class="pt" style="color:'+a.col+'">'+a.em+' '+a.name+'</div><div class="ps">'+a.good+'</div><div class="sp"></div><button class="sb c" onclick="showWaveGacha(true)">戻る</button>');
+}
+
 function skipCard(){continueWave();}
 function doGacha(){
   if(GEM<GCOST){addFloat(W/2,H*.5,'💎不足！','#ff2d55',1.3);return;}
@@ -2274,7 +2469,7 @@ function doGacha(){
     '</div>'
   );
 }
-function continueWave(){waveClearing=false;waveHitCount=0;hideOv();paused=false;startBGM();spawnWave(wave);raf=requestAnimationFrame(loop);}
+function continueWave(){waveClearing=false;waveHitCount=0;if(nextContract){setContract(nextContract);nextContract=null;}if(relics.shieldWave>0){shields=Math.min(9,shields+relics.shieldWave);addFloat(px,py-20,'RELIC SHIELD +'+relics.shieldWave,'#60a5fa',1.1);}hideOv();paused=false;startBGM();spawnWave(wave);raf=requestAnimationFrame(loop);}
 
 // ── Shop ──
 function showShop(){
@@ -2322,8 +2517,12 @@ function showMenu(){
       '<div><div>シングルプレイ</div><div style="font-size:7px;opacity:.3;margin-top:1px;">無限ウェーブ・ボス・ウェーブガチャ・レベルアップ</div></div></button>'+
     '<button class="btn c2" onclick="showDiff()"><span class="em">🤖</span>'+
       '<div><div>ボット対戦</div><div style="font-size:7px;opacity:.3;margin-top:1px;">AIと1vs1対決</div></div></button>'+
+    '<button class="btn c2" onclick="startBossRush()"><span class="em">☠</span>'+
+      '<div><div>BOSS RUSH ∞</div><div style="font-size:7px;opacity:.3;margin-top:1px;">連続ボス撃破モード</div></div></button>'+
     '<button class="btn c4" onclick="openShop()"><span class="em">⚙</span>'+
       '<div><div>アップグレード</div><div style="font-size:7px;opacity:.3;margin-top:1px;">💎でステータス永続強化 (8種類)</div></div></button>'+
+    '<button class="btn c3" onclick="cycleBGMStyle()"><span class="em">🎵</span>'+
+      '<div><div>'+bgmStyleLabel()+'</div><div style="font-size:7px;opacity:.35;margin-top:1px;">BGMスタイル切替</div></div></button>'+
     '<button class="btn" style="border-color:#ffd60a;color:#ffd60a;background:rgba(255,214,10,.06);" onclick="showHangar()">'+'<span class="em">'+(SKINS[curSkin]?SKINS[curSkin].em:'🚀')+'</span>'+'<div><div>HANGAR</div><div style="font-size:7px;opacity:.4;margin-top:1px;">機体スキン ('+Object.keys(unlockedSkins).length+'/'+SKINS.length+'解放)</div></div></button>'+'<button class="btn cg" onclick="showCtrl()"><span class="em">🎮</span><div>操作方法</div></button>'
   );
 }
@@ -2339,7 +2538,7 @@ function showDiff(){
 function showCtrl(){
   showPanel('<div class="pt" style="color:#00ffe7;">操作方法</div>'+
     '<div class="tip">🖱 クリック / ドラッグ → 移動<br>右クリック / Shift → ダッシュ (無敵)<br>Z / Space → ボム (ゲージ満タン時)<br>X → ULTIMA (ULTI満タン時)<br>1〜5 / Q・E → 武器切替<br>SHOP → 永続アップグレード</div>'+
-    '<div class="tip" style="border-color:rgba(192,132,252,.12);color:rgba(192,132,252,.5);margin-top:5px;">ウェーブクリア → 毎回3択強化カード！<br>💎ガチャでさらに強化 (60💎)<br>レベルアップで追加ボーナス<br>コンボ×10でライフ回復 / ×30でULTI充填</div>'+'<div class="tip" style="border-color:rgba(255,214,10,.12);color:rgba(255,214,10,.5);margin-top:5px;">【スキル】 S → アクティブスキル発動<br>A/D → スキル切替 | Tab → スキル選択<br>R → リベンジバースト (バー満タン時)<br>F → フィーバーモード (フィーバーバー満タン時)<br>🕳 BLACKHOLE / ⚡ LIGHTNING / 🪞 MIRROR / 🔥 BERSERK</div>'+
+    '<div class="tip" style="border-color:rgba(192,132,252,.12);color:rgba(192,132,252,.5);margin-top:5px;">ウェーブクリア → 毎回3択強化カード！<br>💎ガチャでさらに強化 (60💎)<br>レベルアップで追加ボーナス<br>コンボ×10でライフ回復 / ×30でULTI充填</div>'+'<div class="tip" style="border-color:rgba(255,214,10,.12);color:rgba(255,214,10,.5);margin-top:5px;">【スキル】 S → アクティブスキル発動<br>A/D → スキル切替 | Tab → スキル選択<br>R → リベンジバースト (バー満タン時)<br>F → フィーバーモード (フィーバーバー満タン時)<br>C → CHAOS OVERDRIVE (カオスバー満タン時)<br>🕳 BLACKHOLE / ⚡ LIGHTNING / 🪞 MIRROR / 🔥 BERSERK</div>'+
     '<button class="sb c" onclick="showMenu()">OK</button>');
 }
 function showResult(title,col){
