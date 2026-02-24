@@ -839,11 +839,13 @@ function spawnWave(w){
   addFloat(W/2,H*.42,_wann,_wannCol,1.4+Math.min(w*.05,0.8));
   var n=Math.min(4+w*2,26);
   n=Math.min(34,Math.floor(n*contractMods.enemyCount));
+  if(gmode==='arcade')n=Math.min(42,Math.floor(n*1.35)+1);
   var pool=w<3?['basic']:w<5?['basic','fast']:w<7?['basic','fast','tank']:
     w<10?['basic','fast','tank','bomber','sniper']:w<14?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2']:w<20?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2','berserker','mine']:Object.keys(ET);
   for(var i=0;i<n;i++){
     var tk=pool[Math.floor(Math.random()*pool.length)];var t=ET[tk];
     var _ws=1+Math.max(0,w-10)*.04;// wave10以降: 毎wave4%強化
+    if(gmode==='arcade')_ws*=1.12;
     enemies.push({type:tk,x:30+Math.random()*(W-60),y:18+Math.random()*(H*.38),
       vx:(Math.random()-.5)*t.spd*Math.min(_ws,2)*contractMods.enemySpd,vy:0,r:t.r,hp:Math.ceil(t.hp*_ws),maxHp:Math.ceil(t.hp*_ws),pts:Math.floor(t.pts*_ws),spd:t.spd*Math.min(_ws,1.8)*contractMods.enemySpd,
       srate:t.srate,bsp:t.bsp*contractMods.enemyBullet,col:t.col,em:t.em,beh:t.beh,alive:true,flash:0,
@@ -887,6 +889,12 @@ function spawnWave(w){
       elite:true,isElite:true,shieldHP:0,shieldMax:0,fuseT:0,
       angle:0,drift:1,driftT:60,st:et.srate,phaseT:0,splits:false,zigDir:1,zigT:0});
   }
+  if(gmode==='arcade'){
+    var _ar=Math.random();
+    if(_ar<.34){addEffect('rapid',360);addFloat(W/2,H*.14,'⚡ ARCADE BOOST: RAPID','#ffd60a',1.1);}
+    else if(_ar<.68){addEffect('chain',360);addFloat(W/2,H*.14,'⛓ ARCADE BOOST: CHAIN','#ffd60a',1.1);}
+    else{shields=Math.min(6,shields+1);addFloat(W/2,H*.14,'🛡 ARCADE BOOST: SHIELD +1','#ffd60a',1.1);}
+  }
   checkUnlocks();document.getElementById('h-wv').textContent=w;
 }
 
@@ -897,7 +905,7 @@ function killBoss(){
   waveClearing=true;// ← 先にフラグ。updateEnemies の wave++ をブロック
   wave++;           // ← ここで1回だけカウントアップ
   var mult=effects.scorex3>0?3:1;var pts=boss.pts*mult;score+=pts;
-  var bgem=gmode==='bossrush'?(120+wave*15):80;
+  var bgem=gmode==='bossrush'?(120+wave*15):(gmode==='arcade'?120:80);
   GEM+=bgem;saveAll();SFX.bexp();shake(24);sf(255,255,255,.4);
   spawnParts(bossX,bossY,boss.col,25);
   addFloat(bossX,bossY,'BOSS!! +'+pts+' 💎+'+bgem,boss.col,2);
@@ -2352,6 +2360,17 @@ function startSingle(){
   var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
   renderWbar();renderSkillBar();hideOv();spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
 }
+function startArcade(){
+  SFX.sel();gmode='arcade';retryFn=startArcade;
+  resize();baseInit();
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderWbar();renderSkillBar();hideOv();
+  addEffect('rapid',480);addEffect('scorex3',240);
+  addFloat(W/2,H*.3,'🎰 ARCADE MODE START!','#ffd60a',1.8);
+  spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
+}
 function startBossRush(){
   SFX.sel();gmode='bossrush';retryFn=startBossRush;
   resize();baseInit();
@@ -2577,6 +2596,8 @@ function showMenu(){
     '<div class="sp"></div>'+
     '<button class="btn c1" onclick="startSingle()"><span class="em">🚀</span>'+
       '<div><div>シングルプレイ</div><div style="font-size:7px;opacity:.3;margin-top:1px;">無限ウェーブ・ボス・ウェーブガチャ・レベルアップ</div></div></button>'+
+    '<button class="btn" style="border-color:#ffd60a;color:#ffd60a;background:rgba(255,214,10,.08);" onclick="startArcade()"><span class="em">🎰</span>'+
+      '<div><div>ARCADE モード</div><div style="font-size:7px;opacity:.45;margin-top:1px;">敵増量・毎WAVEランダム強化・報酬💎アップ</div></div></button>'+
     '<button class="btn c2" onclick="showDiff()"><span class="em">🤖</span>'+
       '<div><div>ボット対戦</div><div style="font-size:7px;opacity:.3;margin-top:1px;">AIと1vs1対決</div></div></button>'+
     '<button class="btn c2" onclick="startBossRush()"><span class="em">☠</span>'+
