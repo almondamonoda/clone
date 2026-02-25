@@ -507,6 +507,37 @@ var ET={
   berserker:{r:17,hp:5, pts:90, spd:1.3,srate:75, bsp:3.5,col:'#ef4444',em:'😡',beh:'chase'},
   mine:     {r:14,hp:2, pts:60, spd:0,  srate:999,bsp:0,  col:'#6366f1',em:'💣',beh:'static'},
   phantom2: {r:12,hp:2, pts:75, spd:2.4,srate:115,bsp:5.0,col:'#a78bfa',em:'🌙',beh:'phase'},
+  nova:     {r:16,hp:3, pts:85, spd:1.8,srate:70, bsp:3.8,col:'#ff00ff',em:'✨',beh:'chase'},
+  vortex:   {r:15,hp:2, pts:65, spd:2.2,srate:100,bsp:4.2,col:'#00ffff',em:'🌀',beh:'orbit'},
+  reaper:   {r:19,hp:7, pts:120,spd:1.1,srate:60, bsp:4.5,col:'#8b00ff',em:'💀',beh:'chase'},
+  crystal:  {r:14,hp:8, pts:110,spd:.6, srate:150,bsp:2.8,col:'#00ff88',em:'💎',beh:'patrol'},
+};
+// ── New Boss Patterns ──
+var BOSS_PATTERNS={
+  chaos: function(bx,by,angle,bsp,spread){
+    var shots=[];
+    for(var i=0;i<spread;i++){
+      var a=angle+Math.PI*2/spread*i+Math.sin(fr*.02)*Math.PI*.3;
+      shots.push({x:bx,y:by,vx:Math.cos(a)*bsp,vy:Math.sin(a)*bsp,r:5,col:'#ff00ff'});
+    }
+    return shots;
+  },
+  wave: function(bx,by,angle,bsp,spread){
+    var shots=[];
+    for(var i=0;i<spread;i++){
+      var a=angle+Math.sin(i*.5+fr*.01)*Math.PI*.4;
+      shots.push({x:bx,y:by,vx:Math.cos(a)*bsp,vy:Math.sin(a)*bsp,r:5,col:'#00ffff'});
+    }
+    return shots;
+  },
+  ring: function(bx,by,angle,bsp,spread){
+    var shots=[];
+    for(var i=0;i<spread;i++){
+      var a=Math.PI*2/spread*i;
+      shots.push({x:bx,y:by,vx:Math.cos(a)*bsp,vy:Math.sin(a)*bsp,r:5,col:'#ffff00'});
+    }
+    return shots;
+  }
 };
 var BOSSES=[
   {wave:5, name:'SCORPION',em:'🦂',r:30,hp:100,pts:700, col:'#ff6000',bsp:3.2,srate:35,spread:5,pattern:'arc'},
@@ -517,6 +548,8 @@ var BOSSES=[
   {wave:30,name:'INFERNO',  em:'🔥',r:50,hp:2000, pts:30000, col:'#ff4400',bsp:9.0,srate:9, spread:24,pattern:'all'},
   {wave:40,name:'ABYSS',    em:'🕳',r:54,hp:3500, pts:60000, col:'#6600ff',bsp:10.5,srate:8,spread:28,pattern:'all'},
   {wave:50,name:'NEMESIS',  em:'💀',r:58,hp:6000, pts:120000,col:'#ff2d55',bsp:12,  srate:7, spread:32,pattern:'all'},
+  {wave:60,name:'ECLIPSE',  em:'🌑',r:62,hp:10000,pts:250000,col:'#1a1a2e',bsp:14,srate:6, spread:36,pattern:'chaos'},
+  {wave:75,name:'TITAN',    em:'🗿',r:70,hp:20000,pts:500000,col:'#ff6600',bsp:16,srate:5, spread:40,pattern:'wave'},
 ];
 
 // ── Game state ──
@@ -919,7 +952,7 @@ function spawnWave(w){
   if(gmode==='arcade')n=Math.min(42,Math.floor(n*1.35)+1);
   if(gmode==='god')n=Math.min(54,Math.floor(n*1.7)+3);
   var pool=w<3?['basic']:w<5?['basic','fast']:w<7?['basic','fast','tank']:
-    w<10?['basic','fast','tank','bomber','sniper']:w<14?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2']:w<20?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2','berserker','mine']:Object.keys(ET);
+    w<10?['basic','fast','tank','bomber','sniper']:w<14?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2']:w<20?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2','berserker','mine','nova']:w<35?['basic','fast','tank','bomber','sniper','ghost','speeder','phantom2','berserker','mine','nova','vortex']:Object.keys(ET);
   for(var i=0;i<n;i++){
     var tk=pool[Math.floor(Math.random()*pool.length)];var t=ET[tk];
     var _ws=1+Math.max(0,w-10)*.04;// wave10以降: 毎wave4%強化
@@ -1028,16 +1061,27 @@ function killBoss(){
   wave++;           // ← ここで1回だけカウントアップ
   var mult=effects.scorex3>0?3:1;var pts=boss.pts*mult;score+=pts;
   var bgem=gmode==='bossrush'?(120+wave*15):(gmode==='arcade'?120:80);
+  if(wave>=60)bgem=Math.floor(bgem*1.5);
+  if(wave>=75)bgem=Math.floor(bgem*2);
   GEM+=bgem;saveAll();SFX.bexp();shake(24);sf(255,255,255,.4);
-  spawnParts(bossX,bossY,boss.col,25);
+  // High wave bonus
+  if(wave>=50){addFloat(bossX,bossY+50,'⭐ WAVE '+wave+' BONUS!','#ffd60a',1.8);}
+  spawnParts(bossX,bossY,boss.col,wave>=60?40:25);
   addFloat(bossX,bossY,'BOSS!! +'+pts+' 💎+'+bgem,boss.col,2);
   spawnRing(bossX,bossY,boss.col,130,4);spawnRing(bossX,bossY,'#fff',80,2);
+  if(wave>=30)spawnRing(bossX,bossY,'#ff00ff',200,2);
+  if(wave>=60)spawnRing(bossX,bossY,'#00ffff',280,2);
   addXP(boss.pts*.1);
   powerups.push({x:bossX-40,y:bossY,r:13,bob:0,type:'bomb'});
   powerups.push({x:bossX+40,y:bossY,r:13,bob:Math.PI,type:'life'});
   powerups.push({x:bossX,y:bossY+30,r:13,bob:Math.PI/2,type:'ulti'});
+  // Wave 30+ ボスからは追加パワーアップをドロップ
+  if(wave>=30)powerups.push({x:bossX-60,y:bossY-30,r:13,bob:Math.PI*.5,type:'chaos'});
+  if(wave>=60)powerups.push({x:bossX+60,y:bossY-30,r:13,bob:Math.PI*1.5,type:'nexus'});
   hud();
   if(wave===26&&!unlockedSkins.void){unlockedSkins.void=true;saveSkins();addFloat(W/2,H*.28,'VOID UNLOCKED!! 🌀','#c084fc',2.5);}
+  if(wave===60&&!unlockedSkins.chaos){unlockedSkins.chaos=true;saveSkins();addFloat(W/2,H*.28,'CHAOS MODE UNLOCKED!! 🌪','#ff00ff',2.5);}
+  if(wave===75&&!unlockedSkins.nexus){unlockedSkins.nexus=true;saveSkins();addFloat(W/2,H*.28,'NEXUS MODE UNLOCKED!! 🌟','#00ffff',2.5);}
   setTimeout(function(){if(!running)return;hud();SFX.wave();showWaveGacha();},1500);
 }
 
@@ -1199,7 +1243,7 @@ function updateEnemies(){
 
 function updateBoss(){
   if(!bossAlive||!boss)return;
-  bossAngle+=.018;
+  bossAngle+=.018+bossPhase*.005;
   var ratio=bossHP/bossMaxHP;
   var newP=ratio>.65?0:ratio>.35?1:2;
   if(newP>bossPhase){bossPhase=newP;shake(10);sf(255,0,50,.2);
@@ -1222,17 +1266,22 @@ function updateBoss(){
     var bspd=boss.bsp*contractMods.enemyBullet*(effects.slow>0?.35:1)*(1+bossPhase*.3);
     var shots=boss.spread*(1+bossPhase),bA=Math.atan2(py-bossY,px-bossX);
     var pat=boss.pattern;
+    // Use custom pattern function if available
+    if(BOSS_PATTERNS[pat]){
+      var customShots=BOSS_PATTERNS[pat](bossX,bossY,bA,bspd,shots);
+      for(var _csi=0;_csi<customShots.length;_csi++){customShots[_csi].trail=[];customShots[_csi].boss=true;eBullets.push(customShots[_csi]);}
+    }
     if(pat==='arc'||pat==='all'){
       for(var i=0;i<shots;i++){var a=bA+(i-(shots-1)/2)*.19;
-        eBullets.push({x:bossX,y:bossY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,r:6,col:boss.col,trail:[],boss:true});}
+        eBullets.push({x:bossX,y:bossY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,r:6,col:boss.col,trail:[],boss:true})}
     }
     if(pat==='spiral'||pat==='all'){
       for(var i=0;i<shots;i++){var a=bossAngle*3+i*(Math.PI*2/shots);
-        eBullets.push({x:bossX,y:bossY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,r:6,col:boss.col,trail:[],boss:true});}
+        eBullets.push({x:bossX,y:bossY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,r:6,col:boss.col,trail:[],boss:true})}
     }
     if((pat==='burst'||pat==='all')&&bossPhase>=1){
       for(var i=0;i<8;i++){var a=i*Math.PI*.25;
-        eBullets.push({x:bossX,y:bossY,vx:Math.cos(a)*bspd*.7,vy:Math.sin(a)*bspd*.7,r:5,col:boss.col,trail:[],boss:true});}
+        eBullets.push({x:bossX,y:bossY,vx:Math.cos(a)*bspd*.7,vy:Math.sin(a)*bspd*.7,r:5,col:boss.col,trail:[],boss:true})}
     }
     bossShootT=boss.srate-bossPhase*6;
   }
@@ -1534,7 +1583,9 @@ function collide(){
           var _rw=Math.random();
           if(_rw<.25){addEffect('rapid',420);}else if(_rw<.5){addEffect('chain',420);}else if(_rw<.75){shields=Math.min(8,shields+2);}else{GEM+=20;saveAll();}
         }
-        addFloat(p.x,p.y,{bomb:'BOMB!',life:'❤ LIFE+1',ulti:'⚡ ULTI!',timewarp:'🌀 TIME WARP',overdrive:'⚡ OVERDRIVE+',crate:'🎁 JACKPOT!'}[p.type]||p.type,'#ffd60a',1.3);
+        else if(p.type==='chaos'){addEffect('rage',480);score+=Math.floor(1500*scoreMult);SFX.bexp();}
+        else if(p.type==='nexus'){ucharge=UMAX;bcharge=BMAX;addEffect('homing',360);}
+        addFloat(p.x,p.y,{bomb:'BOMB!',life:'❤ LIFE+1',ulti:'⚡ ULTI!',timewarp:'🌀 TIME WARP',overdrive:'⚡ OVERDRIVE+',crate:'🎁 JACKPOT!',chaos:'🌪 CHAOS!',nexus:'🌟 NEXUS!'}[p.type]||p.type,'#ffd60a',1.3);
         spawnParts(p.x,p.y,'#ffd60a',14);powerups.splice(i,1);hud();
       }
     }
