@@ -132,10 +132,10 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Or
   <div id="wbar"></div>
   <div id="sbar" style="width:100%;max-width:580px;display:none;gap:3px;padding:2px 6px;background:rgba(0,1,12,.99);border-bottom:1px solid rgba(255,255,255,.04);flex-shrink:0;align-items:center;"></div>
   <div id="vshud" style="display:none;width:100%;max-width:580px;padding:2px 6px;background:rgba(0,1,12,.99);border-bottom:1px solid rgba(255,45,85,.1);flex-shrink:0;align-items:center;gap:4px;">
-  <span style="font-size:7px;color:#00ffe7;font-family:Orbitron,monospace;">YOU</span>
+  <span id="pname" style="font-size:7px;color:#00ffe7;font-family:Orbitron,monospace;">YOU</span>
   <div style="flex:1;height:5px;background:rgba(255,255,255,.08);"><div id="phpf" style="height:100%;background:#00ffe7;width:100%;"></div></div>
   <div style="flex:1;height:5px;background:rgba(255,255,255,.08);"><div id="ehpf" style="height:100%;background:#ff2d55;width:100%;"></div></div>
-  <span style="font-size:7px;color:#ff2d55;font-family:Orbitron,monospace;">BOT</span>
+  <span id="ename" style="font-size:7px;color:#ff2d55;font-family:Orbitron,monospace;">BOT</span>
 </div>
 <canvas id="cv"></canvas>
   <div id="mob">
@@ -527,6 +527,9 @@ var cloneX=0,cloneY=0,cloneAngle=0;
 // VS
 var pHP=100,pMaxHP=100,eHP=100,eMaxHP=100;
 var botX=0,botY=0,botVX=0,botVY=0,botST=0,botDD=1,botDT=0,botAngle=0;
+var fRound=1,fP1Wins=0,fP2Wins=0,fMsgT=0,fMsg='';
+var fState={pvx:0,pvy:0,evx:0,evy:0,pg:false,eg:false,pAtk:0,eAtk:0,pSp:0,eSp:0,pCD:0,eCD:0};
+var fInput={left:false,right:false,jump:false,atk:false,guard:false,spec:false};
 var BC={
   easy:  {spd:1.5,srate:88,acc:.3, hp:80, bsp:2.8},
   normal:{spd:2.6,srate:40,acc:.6, hp:130,bsp:4.0},
@@ -765,9 +768,9 @@ document.addEventListener('keydown',function(e){
   if(e.code==='KeyV'){if(overdrive>=ODMAX&&overdriveActive<=0){overdrive=0;overdriveActive=480;addFloat(px,py,'🔥 OVERDRIVE!!','#f97316',1.8);sf(249,115,22,.25);shake(10);}}
   if(e.code==='KeyC'){e.preventDefault();triggerChaos();}
   if(e.code==='Tab'&&SKILLS.length){e.preventDefault();activeSkill=(activeSkill+1)%SKILLS.length;renderSkillBar();}
-  if(e.code==='KeyA')useSkill((activeSkill+SKILLS.length-1)%SKILLS.length);
-  if(e.code==='KeyS')useSkill(activeSkill);
-  if(e.code==='KeyD')useSkill((activeSkill+1)%SKILLS.length);
+  if(gmode!=='fighter'&&e.code==='KeyA')useSkill((activeSkill+SKILLS.length-1)%SKILLS.length);
+  if(gmode!=='fighter'&&e.code==='KeyS')useSkill(activeSkill);
+  if(gmode!=='fighter'&&e.code==='KeyD')useSkill((activeSkill+1)%SKILLS.length);
   if(e.code==='KeyQ')nextWeapon();
   if(e.code==='KeyE')nextWeapon();
   for(var i=0;i<5;i++)if(e.code==='Digit'+(i+1))switchWeapon(i);
@@ -779,14 +782,32 @@ document.addEventListener('keydown',function(e){
     if(e.code==='ArrowRight')p2Input.right=true;
     if(e.code==='Enter'||e.code==='Numpad0')p2Input.shoot=true;
   }
+  if(gmode==='fighter'){
+    if(e.code==='KeyA')fInput.left=true;
+    if(e.code==='KeyD')fInput.right=true;
+    if(e.code==='KeyW')fInput.jump=true;
+    if(e.code==='KeyJ')fInput.atk=true;
+    if(e.code==='KeyK')fInput.guard=true;
+    if(e.code==='KeyL')fInput.spec=true;
+  }
 });
 document.addEventListener('keyup',function(e){
-  if(gmode!=='local2p')return;
-  if(e.code==='ArrowUp')p2Input.up=false;
-  if(e.code==='ArrowDown')p2Input.down=false;
-  if(e.code==='ArrowLeft')p2Input.left=false;
-  if(e.code==='ArrowRight')p2Input.right=false;
-  if(e.code==='Enter'||e.code==='Numpad0')p2Input.shoot=false;
+  if(gmode==='local2p'){
+    if(e.code==='ArrowUp')p2Input.up=false;
+    if(e.code==='ArrowDown')p2Input.down=false;
+    if(e.code==='ArrowLeft')p2Input.left=false;
+    if(e.code==='ArrowRight')p2Input.right=false;
+    if(e.code==='Enter'||e.code==='Numpad0')p2Input.shoot=false;
+    return;
+  }
+  if(gmode==='fighter'){
+    if(e.code==='KeyA')fInput.left=false;
+    if(e.code==='KeyD')fInput.right=false;
+    if(e.code==='KeyW')fInput.jump=false;
+    if(e.code==='KeyJ')fInput.atk=false;
+    if(e.code==='KeyK')fInput.guard=false;
+    if(e.code==='KeyL')fInput.spec=false;
+  }
 });
 var jA=false,jDx=0,jDy=0;
 var jbase=document.getElementById('jbase'),jknob=document.getElementById('jknob');
@@ -815,7 +836,7 @@ function doBomb(){
   if(!running||paused||bcharge<BMAX)return;
   bcharge=0;bflash=20;SFX.bomb();shake(14);sf(255,214,10,.35);
   var dmg2=5+getU('bomb')*4;var rad=110+getU('bomb')*25;
-  if(gmode!=='bot'){
+  if(gmode!=='bot'&&gmode!=='fighter'){
     if(bossAlive){bossHP=Math.max(0,bossHP-Math.ceil(bossMaxHP*.32));bossFlash=18;if(bossHP<=0){killBoss();return;}}
     for(var _bme=0;_bme<enemies.length;_bme++){var e=enemies[_bme];if(!e.alive)continue;
       var _bmdx=e.x-px,_bmdy=e.y-py;if(_bmdx*_bmdx+_bmdy*_bmdy<rad*rad){
@@ -1028,7 +1049,7 @@ function updatePlayer(){
       e.vx+=dx/d*.4;e.vy+=dy/d*.2;}
   }
   if(shootCool>0)shootCool--;
-  var hasTgt=(gmode!=='bot'&&gmode!=='local2p')?(bossAlive||enemies.some(function(e){return e.alive;})):true;
+  var hasTgt=(gmode==='fighter')?false:((gmode!=='bot'&&gmode!=='local2p')?(bossAlive||enemies.some(function(e){return e.alive;})):true);
   var frate=Math.max(2,WEAPONS[curWeapon].rate-Math.floor(getU('fire')*1.7));
   if(effects.rage>0)frate=Math.max(2,Math.floor(frate*.5));
   if(chaosActive)frate=Math.max(1,Math.floor(frate*.45));
@@ -1207,6 +1228,72 @@ function updateLocal2P(){
     botBullets.push({x:botX,y:botY,vx:Math.cos(a)*6.3,vy:Math.sin(a)*6.3,r:5,col:'#ff2d55',trail:[]});
     botST=10;
   }
+}
+
+function fighterHit(px2,py2,tx,ty,base,col,label,isSpec){
+  var dx=tx-px2,dy=ty-py2;
+  if(Math.abs(dx)<34&&Math.abs(dy)<26){
+    var guard=(label==='P1')?fState.eg:fState.pg;
+    var dmg=guard?Math.floor(base*.35):base;
+    if(label==='P1'){eHP=Math.max(0,eHP-dmg);}else{pHP=Math.max(0,pHP-dmg);}
+    addFloat(tx,ty,'-'+dmg,guard?'#60a5fa':col,1.1);
+    spawnParts(tx,ty,col,guard?4:8);
+    if(!guard)shake(isSpec?8:4);
+    if(label==='P1'&&eHP<=0){endBattle(true);}
+    if(label==='P2'&&pHP<=0){endBattle(false);}
+    vsHud();
+  }
+}
+function updateFighter(){
+  var g=0.55,spd=2.9,jmp=8.2,floor=H*.82;
+  fState.pCD=Math.max(0,fState.pCD-1);fState.eCD=Math.max(0,fState.eCD-1);
+  fState.pAtk=Math.max(0,fState.pAtk-1);fState.eAtk=Math.max(0,fState.eAtk-1);
+  fState.pSp=Math.max(0,fState.pSp-1);fState.eSp=Math.max(0,fState.eSp-1);
+  fState.pg=fInput.guard&&Math.abs(py-floor)<1.2;
+  var aiDx=px-botX,aiFar=Math.abs(aiDx)>55;
+  fState.eg=Math.random()<0.015&&Math.abs(py-botY)<20;
+
+  var move=(fInput.left?-1:0)+(fInput.right?1:0);
+  fState.pvx=move*spd*(fState.pg?.35:1);
+  if(fInput.jump&&Math.abs(py-floor)<1.2)fState.pvy=-jmp;
+  if(fInput.atk&&fState.pCD<=0){fState.pAtk=10;fState.pCD=16;SFX.hit();}
+  if(fInput.spec&&fState.pSp<=0){fState.pSp=18;fState.pCD=24;addFloat(px,py-24,'⚡ BREAKER','#ffd60a',1.1);SFX.ulti();}
+
+  var edir=aiDx>0?1:-1;
+  if(aiFar)fState.evx=edir*(2.1+Math.random()*1.4)*(fState.eg?.3:1); else fState.evx*=.6;
+  if(Math.random()<0.012&&Math.abs(botY-floor)<1.2)fState.evy=-7.5;
+  if(Math.abs(aiDx)<46&&Math.abs(py-botY)<24&&fState.eCD<=0){fState.eAtk=10;fState.eCD=18+Math.floor(Math.random()*7);}
+  if(Math.abs(aiDx)<54&&Math.random()<0.007&&fState.eSp<=0){fState.eSp=18;fState.eCD=28;}
+
+  fState.pvy+=g;fState.evy+=g;
+  px=Math.max(14,Math.min(W-14,px+fState.pvx));
+  botX=Math.max(14,Math.min(W-14,botX+fState.evx));
+  py=Math.min(floor,py+fState.pvy);botY=Math.min(floor,botY+fState.evy);
+  if(py>=floor)fState.pvy=0;if(botY>=floor)fState.evy=0;
+  pAngle=aiDx>0?0:Math.PI;botAngle=aiDx>0?Math.PI:0;
+
+  if(fState.pAtk===8)fighterHit(px+(pAngle===0?22:-22),py,botX,botY,12,'#00ffe7','P1',false);
+  if(fState.pSp===14)fighterHit(px+(pAngle===0?27:-27),py,botX,botY,24,'#ffd60a','P1',true);
+  if(fState.eAtk===8)fighterHit(botX+(botAngle===0?22:-22),botY,px,py,10,'#ff2d55','P2',false);
+  if(fState.eSp===14)fighterHit(botX+(botAngle===0?27:-27),botY,px,py,20,'#ff6b6b','P2',true);
+}
+function drawFighter(){
+  var floor=H*.82;
+  ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,floor+14);ctx.lineTo(W,floor+14);ctx.stroke();
+  function drawChar(x,y,col,face,guard,atk,spec){
+    ctx.save();ctx.translate(x,y);
+    ctx.strokeStyle=col;ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-24,7,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,-17);ctx.lineTo(0,-2);ctx.stroke();
+    var hand=atk>0?16:10;
+    ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(face*hand,-10);ctx.moveTo(0,-10);ctx.lineTo(-face*8,-6);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,-2);ctx.lineTo(-6,12);ctx.moveTo(0,-2);ctx.lineTo(6,12);ctx.stroke();
+    if(guard){ctx.strokeStyle='#60a5fa';ctx.lineWidth=2;ctx.strokeRect(face*8,-18,10,13);}
+    if(spec>0){ctx.strokeStyle='#ffd60a';ctx.globalAlpha=.5;ctx.strokeRect(-16,-34,32,50);ctx.globalAlpha=1;}
+    ctx.restore();
+  }
+  drawChar(px,py,'#00ffe7',pAngle===0?1:-1,fState.pg,fState.pAtk,fState.pSp);
+  drawChar(botX,botY,'#ff2d55',botAngle===0?1:-1,fState.eg,fState.eAtk,fState.eSp);
+  ctx.font='900 10px Orbitron,monospace';ctx.fillStyle='#ffd60a';ctx.textAlign='center';ctx.fillText('FIGHTER MODE',W/2,16);
 }
 
 function updateRaceMode(){
@@ -2405,6 +2492,7 @@ function loop(t){
   }
   if(gmode==='bot')updateBot();
   if(gmode==='local2p')updateLocal2P();
+  if(gmode==='fighter')updateFighter();
   if(gmode==='race')updateRaceMode();
   for(var _pi=parts.length-1;_pi>=0;_pi--){var _p=parts[_pi];_p.x+=_p.vx;_p.y+=_p.vy;_p.vy+=.09;_p.vx*=.97;_p.life-=_p.dec;if(_p.life<=0){parts[_pi]=parts[parts.length-1];parts.pop();}}
   if(parts.length>_maxParts)parts.length=_maxParts;
@@ -2416,6 +2504,7 @@ function loop(t){
   drawArena();drawParticles();
   if(gmode!=='bot'&&gmode!=='local2p'){drawEnemies();drawBoss();}
   if(gmode==='bot'||gmode==='local2p')drawShip(botX,botY,botAngle,'#ff2d55',true,false,false,0);
+  if(gmode==='fighter')drawFighter();
   if(gmode==='race')drawRaceOverlay();
   drawBullets(eBullets);drawBullets(botBullets);drawBulletsNonPierce(pBullets);drawLaserBullets();
   drawPlayer();drawHUD2();
@@ -2466,7 +2555,7 @@ function startSingle(){
   var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
   var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
   var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
-  renderWbar();renderSkillBar();hideOv();spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
+  renderWbar();renderSkillBar();setVsNames('YOU','BOT');hideOv();spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
 }
 function startArcade(){
   SFX.sel();gmode='arcade';retryFn=startArcade;
@@ -2508,6 +2597,7 @@ function startBot(diff){
   var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='flex';
   var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
   renderSkillBar();
+  setVsNames('YOU','BOT');
   vsHud();hideOv();startBGM();raf=requestAnimationFrame(loop);
 }
 
@@ -2528,6 +2618,23 @@ function endRace(win){
   GEM+=win?450:120;saveAll();
   showResult(win?'RACE WIN!':'RACE LOSE',win?'#22d3ee':'#ff2d55');
 }
+function setVsNames(pn,en){var p=document.getElementById('pname'),e=document.getElementById('ename');if(p)p.textContent=pn||'YOU';if(e)e.textContent=en||'BOT';}
+
+function startFighter(){
+  SFX.sel();gmode='fighter';bdiff='normal';retryFn=startFighter;
+  resize();baseInit();
+  px=W*.28;py=H*.82;botX=W*.72;botY=H*.82;
+  pHP=pMaxHP=160;eHP=eMaxHP=160;
+  fInput={left:false,right:false,jump:false,atk:false,guard:false,spec:false};
+  fState={pvx:0,pvy:0,evx:0,evy:0,pg:false,eg:false,pAtk:0,eAtk:0,pSp:0,eSp:0,pCD:0,eCD:0};
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='none';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='flex';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='none';
+  setVsNames('FIGHTER','CPU');
+  addFloat(W/2,H*.25,'🥊 FIGHTER MODE','#ffd60a',1.7);
+  vsHud();hideOv();startBGM();raf=requestAnimationFrame(loop);
+}
+
 function startLocalVS(){
   SFX.sel();gmode='local2p';retryFn=startLocalVS;
   resize();baseInit();
@@ -2537,6 +2644,7 @@ function startLocalVS(){
   var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
   renderSkillBar();
   addFloat(W/2,H*.25,'👥 LOCAL VS START','#ff2d55',1.5);
+  setVsNames('P1','P2');
   vsHud();hideOv();startBGM();raf=requestAnimationFrame(loop);
 }
 function endSingle(){
@@ -2546,7 +2654,8 @@ function endSingle(){
 function endBattle(win){
   if(!running)return;running=false;stopBGM();cancelAnimationFrame(raf);SFX[win?'win':'lose']();
   var pts=win?{easy:350,normal:800,hard:1800}[bdiff]:100;GEM+=pts;saveAll();
-  showResult(win?'WIN!':'DEFEAT',win?'#ffd60a':'#ff2d55');
+  var ttl=(gmode==='fighter')?(win?'K.O. WIN!':'K.O. LOSE'):(win?'WIN!':'DEFEAT');
+  showResult(ttl,win?'#ffd60a':'#ff2d55');
 }
 function doPause(){
   if(!running)return;paused=!paused;
@@ -2769,6 +2878,8 @@ function showBattleModes(){
     '<div class="ps">ここから選べば迷わない：人間2P / ボット / オンライン</div><div class="sp"></div>'+
     '<button class="btn" style="border-color:#ff6b6b;color:#ff6b6b;background:rgba(255,107,107,.08);" onclick="startLocalVS()"><span class="em">👥</span>'+
       '<div><div>人間どうし 2P（ローカル）</div><div style="font-size:7px;opacity:.55;margin-top:1px;">P1:通常操作 / P2:矢印＋Enter</div></div></button>'+
+    '<button class="btn" style="border-color:#ffd60a;color:#ffd60a;background:rgba(255,214,10,.1);" onclick="startFighter()"><span class="em">🥊</span>'+
+      '<div><div>格闘ゲームモード</div><div style="font-size:7px;opacity:.55;margin-top:1px;">鉄拳っぽい近接バトル（WASD + J/K/L）</div></div></button>'+
     '<button class="btn c2" onclick="showDiff()"><span class="em">🤖</span>'+
       '<div><div>ボット対戦</div><div style="font-size:7px;opacity:.45;margin-top:1px;">AIと1vs1</div></div></button>'+
     '<button class="btn" style="border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.1);" onclick="showOnlineDuel()"><span class="em">🌐</span>'+
@@ -2789,6 +2900,7 @@ function showCtrl(){
   showPanel('<div class="pt" style="color:#00ffe7;">操作方法</div>'+
     '<div class="tip">🖱 クリック / ドラッグ → 移動<br>右クリック / Shift → ダッシュ (無敵)<br>Z / Space → ボム (ゲージ満タン時)<br>X → ULTIMA (ULTI満タン時)<br>1〜5 / Q・E → 武器切替<br>SHOP → 永続アップグレード</div>'+
     '<div class="tip" style="border-color:rgba(192,132,252,.12);color:rgba(192,132,252,.5);margin-top:5px;">ウェーブクリア → 毎回3択強化カード！<br>💎ガチャでさらに強化 (60💎)<br>レベルアップで追加ボーナス<br>コンボ×10でライフ回復 / ×30でULTI充填</div>'+'<div class="tip" style="border-color:rgba(255,214,10,.12);color:rgba(255,214,10,.5);margin-top:5px;">【スキル】 S → アクティブスキル発動<br>A/D → スキル切替 | Tab → スキル選択<br>R → リベンジバースト (バー満タン時)<br>F → フィーバーモード (フィーバーバー満タン時)<br>V → OVERDRIVE (OD満タン時)<br>C → CHAOS OVERDRIVE (カオスバー満タン時)<br>🕳 BLACKHOLE / ⚡ LIGHTNING / 🪞 MIRROR / 🔥 BERSERK</div>'+
+    '<div class="tip" style="border-color:rgba(255,214,10,.12);color:rgba(255,214,10,.5);margin-top:5px;">🥊 格闘ゲームモード: A/D移動・Wジャンプ・Jパンチ・Kガード・Lブレイカー</div>'+
     '<button class="sb c" onclick="showMenu()">OK</button>');
 }
 
