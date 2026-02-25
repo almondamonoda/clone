@@ -486,6 +486,7 @@ var BOSSES=[
 // ── Game state ──
 var running=false,paused=false,gmode='single',bdiff='normal',retryFn=null;
 var racePlayerProg=0,raceRivalProg=0,raceGoal=9000,raceRivalBase=5.2,raceFinished=false;
+var carPlayerProg=0,carRivalProg=0,carGoal=12000,carRivalBase=6.4,carFinished=false,carTurbo=0;
 var p2Input={up:false,down:false,left:false,right:false,shoot:false};
 var godMode=false,godFrenzy=0,godMeteorTimer=0;
 var fr=0,score=0,wave=1,lives=3;
@@ -1318,6 +1319,42 @@ function drawRaceOverlay(){
   ctx.fillText('RACE '+Math.floor(racePlayerProg)+' / '+raceGoal,x,y-3);
 }
 
+function updateCarMode(){
+  if(carFinished)return;
+  carPlayerProg=Math.max(carPlayerProg,score+wave*35);
+  if(carTurbo>0)carTurbo--;
+  if(fr%160===0)carTurbo=50;
+  carRivalProg+=carRivalBase+wave*.08+(bossAlive?1.1:0)+(carTurbo>0?.7:0);
+  if(carPlayerProg>=carGoal){carFinished=true;endCarMode(true);}
+  else if(carRivalProg>=carGoal){carFinished=true;endCarMode(false);}
+}
+
+function drawCarOverlay(){
+  var p=Math.max(0,Math.min(1,carPlayerProg/carGoal));
+  var r=Math.max(0,Math.min(1,carRivalProg/carGoal));
+  var x=12,y=10,w=Math.min(W-24,260),h=8;
+  ctx.globalAlpha=.95;
+  ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(x,y,w,h);
+  ctx.fillStyle='#22d3ee';ctx.fillRect(x,y,w*p,h);
+  ctx.strokeStyle='rgba(255,255,255,.2)';ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle='#fb7185';ctx.fillRect(x+w*r-2,y-2,4,h+4);
+  ctx.fillStyle='#fff';ctx.font='9px Orbitron,monospace';ctx.textAlign='left';
+  ctx.fillText('CAR '+Math.floor(carPlayerProg)+' / '+carGoal,x,y-3);
+  if(carTurbo>0){ctx.fillStyle='#ffd60a';ctx.fillText('TURBO!',x+w-42,y-3);}
+}
+
+function drawCarPlayer(){
+  var body=feverActive?'#ffd60a':(berserkTimer>0?'#ff2d55':'#22d3ee');
+  if(Math.floor(iframes/5)%2===1)return;
+  ctx.save();ctx.translate(px,py);ctx.rotate(pAngle+Math.PI/2);
+  ctx.shadowColor=body;ctx.shadowBlur=8;
+  ctx.fillStyle=body;ctx.fillRect(-10,-15,20,30);
+  ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(-7,-10,14,12);
+  ctx.fillStyle='#e5e7eb';ctx.fillRect(-11,-12,3,7);ctx.fillRect(8,-12,3,7);ctx.fillRect(-11,5,3,7);ctx.fillRect(8,5,3,7);
+  if(carTurbo>0||dashActive>0){ctx.fillStyle='rgba(255,214,10,.8)';ctx.beginPath();ctx.moveTo(-4,16);ctx.lineTo(4,16);ctx.lineTo(0,24+Math.random()*5);ctx.closePath();ctx.fill();}
+  ctx.shadowBlur=0;ctx.restore();
+}
+
 // ── Move bullets ──
 function moveBullets(arr,homing){
   for(var i=arr.length-1;i>=0;i--){
@@ -1682,7 +1719,7 @@ function _drawSkinSafe(sk,col){
   sk.draw(ctx,col,berserkTimer>0,feverActive);
 }
 function drawShip(x,y,angle,col,flip,inv,ghost,skinOverride){
-  if(inv&&Math.floor(iframes/5)%2===1)return;
+  if(Math.floor(iframes/5)%2===1)return;
   ctx.save();if(ghost)ctx.globalAlpha*=.42;
   ctx.translate(x,y);ctx.rotate(angle+Math.PI/2);if(flip)ctx.scale(1,-1);
   var sk=SKINS[skinOverride!==undefined?skinOverride:curSkin];
@@ -2494,6 +2531,7 @@ function loop(t){
   if(gmode==='local2p')updateLocal2P();
   if(gmode==='fighter')updateFighter();
   if(gmode==='race')updateRaceMode();
+  if(gmode==='car')updateCarMode();
   for(var _pi=parts.length-1;_pi>=0;_pi--){var _p=parts[_pi];_p.x+=_p.vx;_p.y+=_p.vy;_p.vy+=.09;_p.vx*=.97;_p.life-=_p.dec;if(_p.life<=0){parts[_pi]=parts[parts.length-1];parts.pop();}}
   if(parts.length>_maxParts)parts.length=_maxParts;
   if(eBullets.length>_maxEBullets)eBullets.length=_maxEBullets;
@@ -2506,8 +2544,9 @@ function loop(t){
   if(gmode==='bot'||gmode==='local2p')drawShip(botX,botY,botAngle,'#ff2d55',true,false,false,0);
   if(gmode==='fighter')drawFighter();
   if(gmode==='race')drawRaceOverlay();
+  if(gmode==='car')drawCarOverlay();
   drawBullets(eBullets);drawBullets(botBullets);drawBulletsNonPierce(pBullets);drawLaserBullets();
-  drawPlayer();drawHUD2();
+  if(gmode==='car')drawCarPlayer(); else drawPlayer();drawHUD2();
   ctx.restore();
   
 }
@@ -2529,6 +2568,7 @@ function baseInit(){
   cloneX=px-40;cloneY=py;cloneAngle=0;
   pHP=pMaxHP=100;
   racePlayerProg=0;raceRivalProg=0;raceFinished=false;
+  carPlayerProg=0;carRivalProg=0;carFinished=false;carTurbo=0;
   p2Input={up:false,down:false,left:false,right:false,shoot:false};
   document.getElementById('xpfill').style.width='0%';
   document.getElementById('h-lv').textContent='1';
@@ -2617,6 +2657,24 @@ function endRace(win){
   running=false;stopBGM();cancelAnimationFrame(raf);SFX[win?'win':'lose']();
   GEM+=win?450:120;saveAll();
   showResult(win?'RACE WIN!':'RACE LOSE',win?'#22d3ee':'#ff2d55');
+}
+
+function startCarMode(){
+  SFX.sel();gmode='car';retryFn=startCarMode;
+  resize();baseInit();
+  carGoal=12000;carRivalBase=6.4;
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderWbar();renderSkillBar();hideOv();
+  addFloat(W/2,H*.3,'🚗 CAR MODE START!','#22d3ee',1.8);
+  spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
+}
+function endCarMode(win){
+  if(!running)return;
+  running=false;stopBGM();cancelAnimationFrame(raf);SFX[win?'win':'lose']();
+  GEM+=win?500:150;saveAll();
+  showResult(win?'CAR WIN!':'CAR LOSE',win?'#22d3ee':'#ff2d55');
 }
 function setVsNames(pn,en){var p=document.getElementById('pname'),e=document.getElementById('ename');if(p)p.textContent=pn||'YOU';if(e)e.textContent=en||'BOT';}
 
@@ -2857,6 +2915,8 @@ function showMenu(){
       '<div><div>シングルプレイ</div><div style="font-size:7px;opacity:.3;margin-top:1px;">無限ウェーブ・ボス・ウェーブガチャ・レベルアップ</div></div></button>'+
     '<button class="btn" style="border-color:#22d3ee;color:#22d3ee;background:rgba(34,211,238,.08);" onclick="startRace()"><span class="em">🏁</span>'+
       '<div><div>RACE モード</div><div style="font-size:7px;opacity:.55;margin-top:1px;">先に10,000pt到達で勝利（マリオカート風のわかりやすい競争）</div></div></button>'+
+    '<button class="btn" style="border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,.08);" onclick="startCarMode()"><span class="em">🚗</span>'+
+      '<div><div>CAR モード</div><div style="font-size:7px;opacity:.55;margin-top:1px;">同じバトル基盤で車体に変化、ターボ付きのレース進行</div></div></button>'+
     '<button class="btn" style="border-color:#ff6b6b;color:#ff6b6b;background:rgba(255,107,107,.08);" onclick="showBattleModes()"><span class="em">👥</span>'+
       '<div><div>対戦モード</div><div style="font-size:7px;opacity:.55;margin-top:1px;">人間2P / ボット / オンラインをここに集約</div></div></button>'+
     '<button class="btn" style="border-color:#ffd60a;color:#ffd60a;background:rgba(255,214,10,.08);" onclick="startArcade()"><span class="em">🎰</span>'+
