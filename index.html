@@ -8,6 +8,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
 html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Orbitron',monospace;color:#fff;}
+#g{position:relative;isolation:isolate;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;overflow:hidden;
+  background:
+    radial-gradient(circle at 15% 10%,rgba(0,255,231,.2),transparent 38%),
+    radial-gradient(circle at 82% 18%,rgba(192,132,252,.18),transparent 32%),
+    radial-gradient(circle at 50% 80%,rgba(255,45,85,.16),transparent 36%),
+    #02030a;}
+#g::before,#g::after{content:'';position:absolute;inset:-25%;pointer-events:none;z-index:0;mix-blend-mode:screen;}
+#g::before{background:conic-gradient(from 0deg,rgba(0,255,231,.08),rgba(192,132,252,.04),rgba(255,45,85,.08),rgba(255,214,10,.06),rgba(0,255,231,.08));
+  animation:spinAura 24s linear infinite;}
+#g::after{background:repeating-linear-gradient(180deg,rgba(255,255,255,.02) 0 1px,transparent 1px 4px);opacity:.22;}
 #wrap{display:flex;flex-direction:column;align-items:center;width:100%;height:100%;}
 #hud{width:100%;max-width:580px;display:flex;justify-content:space-between;align-items:center;
   padding:3px 8px;background:rgba(0,1,10,.98);border-bottom:1px solid rgba(0,255,231,.1);flex-shrink:0;}
@@ -22,7 +32,15 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Or
 .wsl.lk{opacity:.16;cursor:default;}
 #xpbar{width:100%;max-width:580px;height:3px;background:rgba(255,255,255,.05);flex-shrink:0;overflow:hidden;}
 #xpfill{height:100%;background:linear-gradient(90deg,#00ffe7,#c084fc);transition:width .3s;}
-#cv{display:block;max-width:580px;width:100%;flex:1;min-height:0;}
+#cv{display:block;max-width:580px;width:100%;flex:1;min-height:0;position:relative;z-index:2;
+  box-shadow:0 0 24px rgba(0,255,231,.24),0 0 40px rgba(192,132,252,.14) inset;}
+.neon-orb{position:absolute;border-radius:50%;filter:blur(.5px);pointer-events:none;z-index:1;animation:orbFloat 11s ease-in-out infinite alternate;}
+.neon-orb.o1{width:180px;height:180px;left:-40px;top:15%;background:radial-gradient(circle,rgba(0,255,231,.24),transparent 68%);}
+.neon-orb.o2{width:160px;height:160px;right:-25px;top:34%;background:radial-gradient(circle,rgba(192,132,252,.22),transparent 70%);animation-delay:-3s;}
+.neon-orb.o3{width:220px;height:220px;left:45%;bottom:-110px;background:radial-gradient(circle,rgba(255,45,85,.24),transparent 68%);animation-delay:-6s;}
+.fun-tag{position:absolute;top:8px;right:max(10px,calc((100vw - 580px)/2 + 10px));font-size:8px;letter-spacing:2px;color:#00ffe7;
+  border:1px solid rgba(0,255,231,.45);padding:3px 6px;background:rgba(0,8,22,.6);text-shadow:0 0 10px currentColor;
+  box-shadow:0 0 16px rgba(0,255,231,.28),inset 0 0 10px rgba(0,255,231,.22);z-index:5;animation:glitchBlink 1.6s steps(2,end) infinite;}
 #mob{display:none;width:100%;max-width:580px;background:rgba(0,1,10,.98);
   border-top:1px solid rgba(0,255,231,.08);padding:4px 8px;
   align-items:center;justify-content:space-between;flex-shrink:0;}
@@ -96,10 +114,17 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Or
 .sk{flex:1;border:1.5px solid;padding:3px 2px;text-align:center;cursor:pointer;font-size:7px;font-family:Orbitron,monospace;letter-spacing:1px;position:relative;overflow:hidden;transition:all .1s;}
 .sk:hover{filter:brightness(1.4);}
 .g-wrap,.fever{/* fever pulse handled in JS */}
+@keyframes spinAura{to{transform:rotate(360deg);}}
+@keyframes orbFloat{from{transform:translate3d(0,0,0) scale(1);}to{transform:translate3d(18px,-20px,0) scale(1.15);}}
+@keyframes glitchBlink{0%,100%{opacity:.95;transform:translate(0,0);}20%{opacity:.65;transform:translate(1px,-1px);}21%{transform:translate(-1px,1px);}55%{opacity:1;}70%{opacity:.7;}}
 </style>
 </head>
 <body>
 <div id="g">
+  <div class="neon-orb o1"></div>
+  <div class="neon-orb o2"></div>
+  <div class="neon-orb o3"></div>
+  <div class="fun-tag" id="fun-tag">NEON CHAOS ONLINE</div>
   <div id="hud">
     <div style="display:flex;gap:8px;">
       <div class="hi"><div class="hl">SCORE</div><div class="hv g" id="h-sc">0</div></div>
@@ -178,6 +203,17 @@ function resize(){
 }
 window.addEventListener('resize',resize);
 loadSkins();loadStreak();
+
+var funTag=document.getElementById('fun-tag');
+var funLines=['NEON CHAOS ONLINE','HYPER BUBBLE ALERT','GRAZE LIKE A NINJA','BOSS MELT PROTOCOL','ULTRA FEVER READY'];
+var funIx=0;
+setInterval(function(){
+  if(!funTag)return;
+  funIx=(funIx+1)%funLines.length;
+  funTag.textContent=funLines[funIx];
+  funTag.style.color=['#00ffe7','#ffd60a','#c084fc','#ff2d55'][funIx%4];
+  funTag.style.borderColor='currentColor';
+},2200);
 
 // ── Audio ──
 var AC=null;
