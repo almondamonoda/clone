@@ -485,6 +485,8 @@ var BOSSES=[
 
 // ── Game state ──
 var running=false,paused=false,gmode='single',bdiff='normal',retryFn=null;
+var racePlayerProg=0,raceRivalProg=0,raceGoal=9000,raceRivalBase=5.2,raceFinished=false;
+var p2Input={up:false,down:false,left:false,right:false,shoot:false};
 var godMode=false,godFrenzy=0,godMeteorTimer=0;
 var fr=0,score=0,wave=1,lives=3;
 var _sin1=0,_sin2=0,_sin3=0;
@@ -769,6 +771,22 @@ document.addEventListener('keydown',function(e){
   if(e.code==='KeyQ')nextWeapon();
   if(e.code==='KeyE')nextWeapon();
   for(var i=0;i<5;i++)if(e.code==='Digit'+(i+1))switchWeapon(i);
+
+  if(gmode==='local2p'){
+    if(e.code==='ArrowUp')p2Input.up=true;
+    if(e.code==='ArrowDown')p2Input.down=true;
+    if(e.code==='ArrowLeft')p2Input.left=true;
+    if(e.code==='ArrowRight')p2Input.right=true;
+    if(e.code==='Enter'||e.code==='Numpad0')p2Input.shoot=true;
+  }
+});
+document.addEventListener('keyup',function(e){
+  if(gmode!=='local2p')return;
+  if(e.code==='ArrowUp')p2Input.up=false;
+  if(e.code==='ArrowDown')p2Input.down=false;
+  if(e.code==='ArrowLeft')p2Input.left=false;
+  if(e.code==='ArrowRight')p2Input.right=false;
+  if(e.code==='Enter'||e.code==='Numpad0')p2Input.shoot=false;
 });
 var jA=false,jDx=0,jDy=0;
 var jbase=document.getElementById('jbase'),jknob=document.getElementById('jknob');
@@ -1010,7 +1028,7 @@ function updatePlayer(){
       e.vx+=dx/d*.4;e.vy+=dy/d*.2;}
   }
   if(shootCool>0)shootCool--;
-  var hasTgt=gmode!=='bot'?(bossAlive||enemies.some(function(e){return e.alive;})):true;
+  var hasTgt=(gmode!=='bot'&&gmode!=='local2p')?(bossAlive||enemies.some(function(e){return e.alive;})):true;
   var frate=Math.max(2,WEAPONS[curWeapon].rate-Math.floor(getU('fire')*1.7));
   if(effects.rage>0)frate=Math.max(2,Math.floor(frate*.5));
   if(chaosActive)frate=Math.max(1,Math.floor(frate*.45));
@@ -1176,6 +1194,43 @@ function updateBot(){
   }
 }
 
+function updateLocal2P(){
+  var spd=3.2;
+  botVX=(p2Input.left?-spd:0)+(p2Input.right?spd:0);
+  botVY=(p2Input.up?-spd:0)+(p2Input.down?spd:0);
+  botX=Math.max(13,Math.min(W-13,botX+botVX));
+  botY=Math.max(13,Math.min(H*.45,botY+botVY));
+  botAngle=Math.atan2(py-botY,px-botX);
+  botST--;
+  if(p2Input.shoot&&botST<=0){
+    var a=botAngle;
+    botBullets.push({x:botX,y:botY,vx:Math.cos(a)*6.3,vy:Math.sin(a)*6.3,r:5,col:'#ff2d55',trail:[]});
+    botST=10;
+  }
+}
+
+function updateRaceMode(){
+  if(raceFinished)return;
+  racePlayerProg=Math.max(racePlayerProg,score);
+  raceRivalProg+=raceRivalBase+wave*.05;
+  if(bossAlive)raceRivalProg+=.7;
+  if(racePlayerProg>=raceGoal){raceFinished=true;endRace(true);}
+  else if(raceRivalProg>=raceGoal){raceFinished=true;endRace(false);}
+}
+
+function drawRaceOverlay(){
+  var p=Math.max(0,Math.min(1,racePlayerProg/raceGoal));
+  var r=Math.max(0,Math.min(1,raceRivalProg/raceGoal));
+  var x=12,y=10,w=Math.min(W-24,240),h=7;
+  ctx.globalAlpha=.95;
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(x,y,w,h);
+  ctx.fillStyle='#00ffe7';ctx.fillRect(x,y,w*p,h);
+  ctx.strokeStyle='rgba(255,255,255,.2)';ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle='#ff2d55';ctx.fillRect(x+w*r-2,y-2,4,h+4);
+  ctx.fillStyle='#fff';ctx.font='9px Orbitron,monospace';ctx.textAlign='left';
+  ctx.fillText('RACE '+Math.floor(racePlayerProg)+' / '+raceGoal,x,y-3);
+}
+
 // ── Move bullets ──
 function moveBullets(arr,homing){
   for(var i=arr.length-1;i>=0;i--){
@@ -1325,7 +1380,7 @@ function collide(){
     }
   }
   // Bot mode
-  if(gmode==='bot'){
+  if(gmode==='bot'||gmode==='local2p'){
     for(var bi=pBullets.length-1;bi>=0;bi--){
       var b=pBullets[bi];
       if(b.x<-30||b.x>W+30||b.y<-30||b.y>H+30){pBullets.splice(bi,1);continue;}var _bx2=b.x-botX,_by2=b.y-botY,_br3=13+b.r;if(_bx2*_bx2+_by2*_by2<_br3*_br3){
@@ -2342,13 +2397,15 @@ function loop(t){
   updateGodMode();
   updatePlayer();
   moveBullets(pBullets,true);moveBullets(eBullets,false);moveBullets(botBullets,false);
-  if(gmode!=='bot'){updateEnemies();updateBoss();trySpawnElite();checkBossRage();tryWaveEvent();updateMagnet();
+  if(gmode!=='bot'&&gmode!=='local2p'){updateEnemies();updateBoss();trySpawnElite();checkBossRage();tryWaveEvent();updateMagnet();
     if(!bossAlive&&!miniBossAlive&&wave>0&&wave%7===0&&fr%90===0&&Math.random()<.12){
       miniBossAlive=true;
       enemies.push({type:'mini',x:W/2,y:60,vx:0,vy:0,r:24,hp:160+wave*18,maxHp:160+wave*18,pts:2500+wave*220,spd:1.5,srate:34,bsp:5.2,col:'#22d3ee',em:'🛸',beh:'chase',alive:true,flash:0,elite:true,isElite:true,shieldHP:0,shieldMax:0,fuseT:0,angle:0,drift:1,driftT:50,st:25,phaseT:0,splits:false,zigDir:1,zigT:0});
       addFloat(W/2,H*.2,'🛸 MINI BOSS INBOUND','#22d3ee',1.6);}
   }
   if(gmode==='bot')updateBot();
+  if(gmode==='local2p')updateLocal2P();
+  if(gmode==='race')updateRaceMode();
   for(var _pi=parts.length-1;_pi>=0;_pi--){var _p=parts[_pi];_p.x+=_p.vx;_p.y+=_p.vy;_p.vy+=.09;_p.vx*=.97;_p.life-=_p.dec;if(_p.life<=0){parts[_pi]=parts[parts.length-1];parts.pop();}}
   if(parts.length>_maxParts)parts.length=_maxParts;
   if(eBullets.length>_maxEBullets)eBullets.length=_maxEBullets;
@@ -2357,8 +2414,9 @@ function loop(t){
   collide();
   ctx.save();ctx.translate(shakeX,shakeY);
   drawArena();drawParticles();
-  if(gmode!=='bot'){drawEnemies();drawBoss();}
-  if(gmode==='bot')drawShip(botX,botY,botAngle,'#ff2d55',true,false,false,0);
+  if(gmode!=='bot'&&gmode!=='local2p'){drawEnemies();drawBoss();}
+  if(gmode==='bot'||gmode==='local2p')drawShip(botX,botY,botAngle,'#ff2d55',true,false,false,0);
+  if(gmode==='race')drawRaceOverlay();
   drawBullets(eBullets);drawBullets(botBullets);drawBulletsNonPierce(pBullets);drawLaserBullets();
   drawPlayer();drawHUD2();
   ctx.restore();
@@ -2381,6 +2439,8 @@ function baseInit(){
   px=W/2;py=H*.72;pvx=0;pvy=0;destX=px;destY=py;moving=false;pAngle=0;
   cloneX=px-40;cloneY=py;cloneAngle=0;
   pHP=pMaxHP=100;
+  racePlayerProg=0;raceRivalProg=0;raceFinished=false;
+  p2Input={up:false,down:false,left:false,right:false,shoot:false};
   document.getElementById('xpfill').style.width='0%';
   document.getElementById('h-lv').textContent='1';
   hud();running=true;paused=false;
@@ -2448,6 +2508,35 @@ function startBot(diff){
   var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='flex';
   var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
   renderSkillBar();
+  vsHud();hideOv();startBGM();raf=requestAnimationFrame(loop);
+}
+
+function startRace(){
+  SFX.sel();gmode='race';retryFn=startRace;
+  resize();baseInit();
+  raceGoal=10000;raceRivalBase=5.6;
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderWbar();renderSkillBar();hideOv();
+  addFloat(W/2,H*.3,'🏁 RACE MODE START!','#22d3ee',1.8);
+  spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
+}
+function endRace(win){
+  if(!running)return;
+  running=false;stopBGM();cancelAnimationFrame(raf);SFX[win?'win':'lose']();
+  GEM+=win?450:120;saveAll();
+  showResult(win?'RACE WIN!':'RACE LOSE',win?'#22d3ee':'#ff2d55');
+}
+function startLocalVS(){
+  SFX.sel();gmode='local2p';retryFn=startLocalVS;
+  resize();baseInit();
+  botX=W/2;botY=H*.18;botVX=0;botVY=0;eHP=eMaxHP=100;botST=8;botDT=60;botDD=1;
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='none';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='flex';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderSkillBar();
+  addFloat(W/2,H*.25,'👥 LOCAL VS START','#ff2d55',1.5);
   vsHud();hideOv();startBGM();raf=requestAnimationFrame(loop);
 }
 function endSingle(){
@@ -2657,14 +2746,15 @@ function showMenu(){
     '<div class="sp"></div>'+
     '<button class="btn c1" onclick="startSingle()"><span class="em">🚀</span>'+
       '<div><div>シングルプレイ</div><div style="font-size:7px;opacity:.3;margin-top:1px;">無限ウェーブ・ボス・ウェーブガチャ・レベルアップ</div></div></button>'+
+    '<button class="btn" style="border-color:#22d3ee;color:#22d3ee;background:rgba(34,211,238,.08);" onclick="startRace()"><span class="em">🏁</span>'+
+      '<div><div>RACE モード</div><div style="font-size:7px;opacity:.55;margin-top:1px;">先に10,000pt到達で勝利（マリオカート風のわかりやすい競争）</div></div></button>'+
+    '<button class="btn" style="border-color:#ff6b6b;color:#ff6b6b;background:rgba(255,107,107,.08);" onclick="showBattleModes()"><span class="em">👥</span>'+
+      '<div><div>対戦モード</div><div style="font-size:7px;opacity:.55;margin-top:1px;">人間2P / ボット / オンラインをここに集約</div></div></button>'+
     '<button class="btn" style="border-color:#ffd60a;color:#ffd60a;background:rgba(255,214,10,.08);" onclick="startArcade()"><span class="em">🎰</span>'+
       '<div><div>ARCADE モード</div><div style="font-size:7px;opacity:.45;margin-top:1px;">敵増量・毎WAVEランダム強化・報酬💎アップ</div></div></button>'+
     '<button class="btn" style="border-color:#ff2d55;color:#ff2d55;background:rgba(255,45,85,.1);" onclick="startGod()"><span class="em">👑</span>'+
       '<div><div>GOD GAME</div><div style="font-size:7px;opacity:.55;margin-top:1px;">激変モード：神罰・メテオ・常時ブースト</div></div></button>'+
-    '<button class="btn c2" onclick="showDiff()"><span class="em">🤖</span>'+
-      '<div><div>ボット対戦</div><div style="font-size:7px;opacity:.3;margin-top:1px;">AIと1vs1対決</div></div></button>'+
-    '<button class="btn" style="border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.1);" onclick="showOnlineDuel()"><span class="em">🌐</span>'+
-      '<div><div>ONLINE 2P DUEL β</div><div style="font-size:7px;opacity:.45;margin-top:1px;">ルームコードで2人対戦</div></div></button>'+
+
     '<button class="btn c2" onclick="startBossRush()"><span class="em">☠</span>'+
       '<div><div>BOSS RUSH ∞</div><div style="font-size:7px;opacity:.3;margin-top:1px;">連続ボス撃破モード</div></div></button>'+
     '<button class="btn c4" onclick="openShop()"><span class="em">⚙</span>'+
@@ -2674,6 +2764,18 @@ function showMenu(){
     '<button class="btn" style="border-color:#ffd60a;color:#ffd60a;background:rgba(255,214,10,.06);" onclick="showHangar()">'+'<span class="em">'+(SKINS[curSkin]?SKINS[curSkin].em:'🚀')+'</span>'+'<div><div>HANGAR</div><div style="font-size:7px;opacity:.4;margin-top:1px;">機体スキン ('+Object.keys(unlockedSkins).length+'/'+SKINS.length+'解放)</div></div></button>'+'<button class="btn cg" onclick="showCtrl()"><span class="em">🎮</span><div>操作方法</div></button>'
   );
 }
+function showBattleModes(){
+  showPanel('<div class="pt" style="color:#ff6b6b;">対戦モード</div>'+
+    '<div class="ps">ここから選べば迷わない：人間2P / ボット / オンライン</div><div class="sp"></div>'+
+    '<button class="btn" style="border-color:#ff6b6b;color:#ff6b6b;background:rgba(255,107,107,.08);" onclick="startLocalVS()"><span class="em">👥</span>'+
+      '<div><div>人間どうし 2P（ローカル）</div><div style="font-size:7px;opacity:.55;margin-top:1px;">P1:通常操作 / P2:矢印＋Enter</div></div></button>'+
+    '<button class="btn c2" onclick="showDiff()"><span class="em">🤖</span>'+
+      '<div><div>ボット対戦</div><div style="font-size:7px;opacity:.45;margin-top:1px;">AIと1vs1</div></div></button>'+
+    '<button class="btn" style="border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.1);" onclick="showOnlineDuel()"><span class="em">🌐</span>'+
+      '<div><div>ONLINE 2P DUEL β</div><div style="font-size:7px;opacity:.45;margin-top:1px;">離れた相手と手動接続</div></div></button>'+
+    '<button class="sb r" onclick="showMenu()">← 戻る</button>');
+}
+
 function showDiff(){
   showPanel('<div class="pt" style="color:#ff2d55;">DIFFICULTY</div><div class="sp"></div>'+
     '<div class="drow">'+
@@ -2681,7 +2783,7 @@ function showDiff(){
     '<div class="dc dc2" onclick="startBot(\'normal\')"><div style="font-size:22px;">🟡</div><div>NORMAL</div><div style="font-size:7px;opacity:.4;margin-top:3px;">標準難易度</div></div>'+
     '<div class="dc dc3" onclick="startBot(\'hard\')"><div style="font-size:22px;">🔴</div><div>HARD</div><div style="font-size:7px;opacity:.4;margin-top:3px;">上級者向け</div></div>'+
     '</div>'+
-    '<button class="sb r" onclick="showMenu()">← 戻る</button>');
+    '<button class="sb r" onclick="showBattleModes()">← 戻る</button>');
 }
 function showCtrl(){
   showPanel('<div class="pt" style="color:#00ffe7;">操作方法</div>'+
