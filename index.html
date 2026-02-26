@@ -4198,6 +4198,375 @@ function drawShopMenu(){
     ctx.fillText(skin.name+' - '+skin.price+'💎',370,y);
   });
 }
+
+// ════════════════════════════════════════════════════════════════
+// スーパーコンボシステム関数
+// ════════════════════════════════════════════════════════════════
+
+function triggerSuperCombo(){
+  superCombo.count++;
+  superCombo.lastComboTime=Date.now();
+  
+  if(superCombo.count>50){
+    superCombo.multiplier=Math.min(superCombo.maxMultiplier,Math.floor(superCombo.count/10));
+    superCombo.isActive=true;
+    
+    // 画面演出
+    screenEffects.flash=0.5;
+    screenEffects.shake=5;
+    
+    // パーティクル爆発
+    for(var i=0;i<20;i++){
+      var angle=Math.random()*Math.PI*2;
+      var speed=5+Math.random()*5;
+      superCombo.particles.push({
+        x:px,y:py,
+        vx:Math.cos(angle)*speed,
+        vy:Math.sin(angle)*speed,
+        life:30,
+        color:'#ffff00'
+      });
+    }
+    
+    addFloat(px,py,'🔥 SUPER COMBO x'+superCombo.multiplier+'!','#ffff00',3);
+    SFX.ulti();
+  }
+}
+
+function updateSuperCombo(){
+  if(Date.now()-superCombo.lastComboTime>superCombo.comboDuration){
+    superCombo.count=0;
+    superCombo.multiplier=1;
+    superCombo.isActive=false;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// スキル進化システム関数
+// ════════════════════════════════════════════════════════════════
+
+function evolveSkill(skillName){
+  var skill=skillEvolution[skillName+'Level'];
+  if(skill<skillEvolution.maxLevel&&skillEvolution.evolutionPoints>=skill*10){
+    skillEvolution.evolutionPoints-=skill*10;
+    skillEvolution[skillName+'Level']++;
+    
+    addFloat(400,300,'⚡ '+skillName.toUpperCase()+' EVOLVED!','#00ffff',2);
+    screenEffects.flash=0.8;
+    SFX.event();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// ボス変身フェーズシステム関数
+// ════════════════════════════════════════════════════════════════
+
+function triggerBossTransform(){
+  if(bossTransform.currentPhase<bossTransform.maxPhase){
+    bossTransform.currentPhase++;
+    bossTransform.transforming=true;
+    
+    screenEffects.shake=10;
+    screenEffects.flash=1.0;
+    
+    // 変身パーティクル
+    for(var i=0;i<50;i++){
+      var angle=Math.random()*Math.PI*2;
+      var speed=8+Math.random()*8;
+      bossTransform.transformParticles.push({
+        x:bx,y:by,
+        vx:Math.cos(angle)*speed,
+        vy:Math.sin(angle)*speed,
+        life:60,
+        color:'#ff00ff'
+      });
+    }
+    
+    addFloat(bx,by,'👹 BOSS TRANSFORM PHASE '+bossTransform.currentPhase+'!','#ff00ff',3);
+    SFX.ulti();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// 敵の群れシステム関数
+// ════════════════════════════════════════════════════════════════
+
+function spawnEnemySwarm(){
+  if(swarmSystem.swarms.length<swarmSystem.maxSwarms){
+    var swarm={
+      x:Math.random()*800,
+      y:0,
+      enemies:[],
+      formation:'circle'
+    };
+    
+    for(var i=0;i<swarmSystem.swarmSize;i++){
+      var angle=i/swarmSystem.swarmSize*Math.PI*2;
+      swarm.enemies.push({
+        x:swarm.x+Math.cos(angle)*30,
+        y:swarm.y+Math.sin(angle)*30,
+        type:'common',
+        hp:30
+      });
+    }
+    
+    swarmSystem.swarms.push(swarm);
+    addFloat(400,100,'🌪 ENEMY SWARM INCOMING!','#ff0000',2);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// ウルティメイトチャージシステム関数
+// ════════════════════════════════════════════════════════════════
+
+function chargeUltimate(){
+  if(ultimateCharge.charge<ultimateCharge.maxCharge){
+    ultimateCharge.charge+=2;
+  }
+  
+  if(ultimateCharge.charge>=ultimateCharge.maxCharge){
+    ultimateCharge.isActive=true;
+    ultimateCharge.duration=ultimateCharge.maxDuration;
+    ultimateCharge.charge=0;
+    
+    screenEffects.flash=1.0;
+    screenEffects.shake=15;
+    
+    addFloat(px,py,'⚡ ULTIMATE ACTIVATED!','#ffff00',3);
+    SFX.ulti();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// ボス必殺技システム関数
+// ════════════════════════════════════════════════════════════════
+
+function chargeBossMegaAttack(){
+  if(!bossMegaAttack.charging){
+    bossMegaAttack.charging=true;
+    bossMegaAttack.chargeLevel=0;
+    addFloat(bx,by,'💥 BOSS CHARGING MEGA ATTACK!','#ff0000',2);
+  }
+  
+  bossMegaAttack.chargeLevel+=2;
+  
+  if(bossMegaAttack.chargeLevel>=bossMegaAttack.maxChargeLevel){
+    fireBossMegaAttack();
+  }
+}
+
+function fireBossMegaAttack(){
+  var attackType=bossMegaAttack.attackTypes[Math.floor(Math.random()*bossMegaAttack.attackTypes.length)];
+  
+  screenEffects.shake=20;
+  screenEffects.flash=1.0;
+  
+  addFloat(bx,by,'💥 '+attackType+'!','#ff0000',3);
+  SFX.ulti();
+  
+  bossMegaAttack.charging=false;
+  bossMegaAttack.chargeLevel=0;
+}
+
+// ════════════════════════════════════════════════════════════════
+// 画面エフェクト関数
+// ════════════════════════════════════════════════════════════════
+
+function updateScreenEffects(){
+  if(screenEffects.shake>0){
+    screenEffects.shake*=0.9;
+  }
+  if(screenEffects.flash>0){
+    screenEffects.flash*=0.95;
+  }
+  if(screenEffects.vignette>0){
+    screenEffects.vignette*=0.98;
+  }
+  if(screenEffects.slowmo<1.0){
+    screenEffects.slowmo+=0.02;
+  }
+}
+
+function applyScreenShake(){
+  if(screenEffects.shake>0){
+    var shakeX=(Math.random()-0.5)*screenEffects.shake;
+    var shakeY=(Math.random()-0.5)*screenEffects.shake;
+    ctx.translate(shakeX,shakeY);
+  }
+}
+
+function applyScreenFlash(){
+  if(screenEffects.flash>0){
+    ctx.fillStyle='rgba(255,255,255,'+screenEffects.flash*0.5+')';
+    ctx.fillRect(0,0,800,600);
+  }
+}
+
+function applyVignette(){
+  if(screenEffects.vignette>0){
+    var gradient=ctx.createRadialGradient(400,300,0,400,300,600);
+    gradient.addColorStop(0,'rgba(0,0,0,0)');
+    gradient.addColorStop(1,'rgba(0,0,0,'+screenEffects.vignette+')');
+    ctx.fillStyle=gradient;
+    ctx.fillRect(0,0,800,600);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// 新ゲームモード定義
+// ════════════════════════════════════════════════════════════════
+
+var NEW_GAME_MODES={
+  'TIME_ATTACK':{
+    name:'⏱ タイムアタック',
+    description:'60秒で最高スコアを目指す',
+    duration:60000,
+    scoreMultiplier:2.0,
+    difficulty:1.5
+  },
+  'SURVIVAL':{
+    name:'🛡 サバイバル',
+    description:'敵を倒し続けて生き残る',
+    waveIncrement:2,
+    enemyMultiplier:1.3,
+    scoreMultiplier:1.5
+  },
+  'BOSS_RUSH_EX':{
+    name:'👹 ボスラッシュEX',
+    description:'強力なボスを次々と撃破',
+    onlyBosses:true,
+    bossHealth:1.5,
+    bossReward:5000
+  },
+  'WAVE_CHALLENGE':{
+    name:'🌊 ウェーブチャレンジ',
+    description:'指定されたウェーブをクリア',
+    targetWave:50,
+    scoreMultiplier:3.0,
+    difficulty:2.0
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// 新敵タイプ（15種類追加）
+// ════════════════════════════════════════════════════════════════
+
+var NEW_ENEMY_TYPES={
+  'SHADOW_KNIGHT':{emoji:'🗡',hp:80,atk:15,spd:3,behavior:'aggressive'},
+  'PLASMA_DRONE':{emoji:'🤖',hp:40,atk:20,spd:6,behavior:'chase'},
+  'VOID_ENTITY':{emoji:'🌑',hp:100,atk:25,spd:2,behavior:'orbit'},
+  'CYBER_NINJA':{emoji:'🥷',hp:50,atk:18,spd:8,behavior:'zigzag'},
+  'LAVA_GOLEM':{emoji:'🔥',hp:120,atk:20,spd:1,behavior:'patrol'},
+  'ICE_WRAITH':{emoji:'❄',hp:60,atk:12,spd:5,behavior:'phase'},
+  'ELECTRIC_SPIDER':{emoji:'⚡',hp:45,atk:16,spd:7,behavior:'web'},
+  'GRAVITY_WELL':{emoji:'⚫',hp:90,atk:0,spd:0,behavior:'pull'},
+  'QUANTUM_GHOST':{emoji:'👻',hp:55,atk:14,spd:4,behavior:'blink'},
+  'INFERNO_BEAST':{emoji:'🐉',hp:110,atk:22,spd:3,behavior:'rampage'},
+  'FROST_TITAN':{emoji:'🧊',hp:130,atk:18,spd:2,behavior:'stomp'},
+  'SHADOW_ASSASSIN':{emoji:'🗡️',hp:35,atk:25,spd:9,behavior:'ambush'},
+  'VOID_WALKER':{emoji:'🌀',hp:75,atk:20,spd:4,behavior:'teleport'},
+  'CHAOS_ELEMENTAL':{emoji:'💫',hp:85,atk:23,spd:5,behavior:'chaotic'},
+  'NEXUS_GUARDIAN':{emoji:'🛡️',hp:150,atk:15,spd:2,behavior:'defend'}
+};
+
+// ════════════════════════════════════════════════════════════════
+// 新ボス（10体追加）
+// ════════════════════════════════════════════════════════════════
+
+var NEW_BOSSES={
+  'SHADOW_LORD':{wave:80,emoji:'👿',hp:500,pattern:'SHADOW_BARRAGE'},
+  'PLASMA_OVERLORD':{wave:85,emoji:'⚡',hp:550,pattern:'PLASMA_STORM'},
+  'VOID_EMPEROR':{wave:90,emoji:'🌑',hp:600,pattern:'VOID_COLLAPSE'},
+  'CYBER_TYRANT':{wave:95,emoji:'🤖',hp:650,pattern:'CYBER_ASSAULT'},
+  'INFERNO_KING':{wave:100,emoji:'🔥',hp:700,pattern:'LAVA_ERUPTION'},
+  'FROST_QUEEN':{wave:105,emoji:'❄️',hp:650,pattern:'ICE_BLIZZARD'},
+  'CHAOS_GOD':{wave:110,emoji:'💫',hp:800,pattern:'CHAOS_EXPLOSION'},
+  'NEXUS_PRIME':{wave:115,emoji:'🌟',hp:900,pattern:'NEXUS_BEAM'},
+  'INFINITY_DRAGON':{wave:120,emoji:'🐉',hp:1000,pattern:'INFINITY_BARRAGE'},
+  'ULTIMATE_ENTITY':{wave:125,emoji:'👹',hp:1200,pattern:'ULTIMATE_ANNIHILATION'}
+};
+
+// ════════════════════════════════════════════════════════════════
+// 劇的なビジュアルエフェクト
+// ════════════════════════════════════════════════════════════════
+
+function drawDramaticEffects(){
+  // スクリーンシェイク
+  applyScreenShake();
+  
+  // フラッシュエフェクト
+  applyScreenFlash();
+  
+  // ビネットエフェクト
+  applyVignette();
+  
+  // スーパーコンボパーティクル
+  for(var i=superCombo.particles.length-1;i>=0;i--){
+    var p=superCombo.particles[i];
+    p.x+=p.vx;
+    p.y+=p.vy;
+    p.life--;
+    
+    ctx.fillStyle=p.color;
+    ctx.globalAlpha=p.life/30;
+    ctx.fillRect(p.x,p.y,4,4);
+    ctx.globalAlpha=1;
+    
+    if(p.life<=0){
+      superCombo.particles.splice(i,1);
+    }
+  }
+  
+  // ボス変身パーティクル
+  for(var i=bossTransform.transformParticles.length-1;i>=0;i--){
+    var p=bossTransform.transformParticles[i];
+    p.x+=p.vx;
+    p.y+=p.vy;
+    p.life--;
+    
+    ctx.fillStyle=p.color;
+    ctx.globalAlpha=p.life/60;
+    ctx.fillRect(p.x,p.y,6,6);
+    ctx.globalAlpha=1;
+    
+    if(p.life<=0){
+      bossTransform.transformParticles.splice(i,1);
+    }
+  }
+}
+
+function drawUltimateEffect(){
+  if(ultimateCharge.isActive){
+    // ウルティメイト発動時の画面全体エフェクト
+    ctx.fillStyle='rgba(255,255,0,0.3)';
+    ctx.fillRect(0,0,800,600);
+    
+    // プレイヤーの周りにオーラ
+    ctx.strokeStyle='#ffff00';
+    ctx.lineWidth=3;
+    var auraSize=50+Math.sin(Date.now()/100)*10;
+    ctx.beginPath();
+    ctx.arc(px,py,auraSize,0,Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+function drawBossMegaAttackCharge(){
+  if(bossMegaAttack.charging){
+    // ボスの周りに充電エフェクト
+    ctx.strokeStyle='#ff0000';
+    ctx.lineWidth=2;
+    var chargeSize=30+bossMegaAttack.chargeLevel/2;
+    ctx.beginPath();
+    ctx.arc(bx,by,chargeSize,0,Math.PI*2);
+    ctx.stroke();
+    
+    // 充電レベルテキスト
+    ctx.fillStyle='#ff0000';
+    ctx.font='bold 14px Arial';
+    ctx.fillText('CHARGING: '+Math.floor(bossMegaAttack.chargeLevel)+'%',bx-40,by-50);
+  }
+}
 </script>
 </body>
 </html>
