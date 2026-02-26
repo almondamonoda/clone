@@ -561,6 +561,121 @@ var godMode=false,godFrenzy=0,godMeteorTimer=0;
 var fr=0,score=0,wave=1,lives=3;
 
 // ════════════════════════════════════════════════════════════════
+// MONETIZATION SYSTEMS: 5つの収益化システム
+// ════════════════════════════════════════════════════════════════
+
+// ─── プレミアムジェムシステム ───────────────────────────────────
+var gemSystem={
+  totalGems:0,
+  purchaseHistory:[],
+  lastPurchaseTime:0,
+  dailyLimit:10000
+};
+
+var GEM_PACKAGES=[
+  {id:'small',gems:100,price:0.99,label:'100 💎'},
+  {id:'medium',gems:500,price:4.99,label:'500 💎 (10%OFF)'},
+  {id:'large',gems:1200,price:9.99,label:'1200 💎 (20%OFF)'},
+  {id:'xlarge',gems:3000,price:19.99,label:'3000 💎 (30%OFF)'}
+];
+
+// ─── コスメティックショップ ───────────────────────────────────
+var cosmetics={
+  ownedSkins:[],
+  ownedTrails:[],
+  ownedThemes:[],
+  selectedSkin:'classic_blue',
+  selectedTrail:'standard',
+  selectedTheme:'space'
+};
+
+var COSMETIC_ITEMS={
+  skins:[
+    {id:'neon_pink',name:'ネオンピンク',price:299,rarity:'rare'},
+    {id:'gold_edition',name:'ゴールドエディション',price:499,rarity:'epic'},
+    {id:'dark_shadow',name:'ダークシャドウ',price:399,rarity:'rare'},
+    {id:'plasma',name:'プラズマ',price:599,rarity:'epic'},
+    {id:'cyber_chrome',name:'サイバークローム',price:699,rarity:'legendary'}
+  ],
+  trails:[
+    {id:'fire',name:'炎トレイル',price:199,rarity:'rare'},
+    {id:'ice',name:'氷トレイル',price:199,rarity:'rare'},
+    {id:'lightning',name:'電光トレイル',price:199,rarity:'rare'},
+    {id:'rainbow',name:'虹トレイル',price:399,rarity:'epic'}
+  ],
+  themes:[
+    {id:'cyber_city',name:'サイバーシティ',price:199,rarity:'rare'},
+    {id:'deep_sea',name:'深海',price:199,rarity:'rare'},
+    {id:'neon_night',name:'ネオンナイト',price:299,rarity:'epic'}
+  ]
+};
+
+// ─── バトルパスシステム ───────────────────────────────────────
+var battlePass={
+  currentSeason:1,
+  seasonStartDate:Date.now(),
+  seasonDuration:30*24*60*60*1000,
+  hasPremiumPass:false,
+  freeProgress:0,
+  premiumProgress:0,
+  maxProgress:100,
+  premiumPrice:4.99
+};
+
+var BATTLE_PASS_REWARDS={
+  free:[
+    {level:10,reward:'gems',amount:100},
+    {level:20,reward:'gems',amount:200},
+    {level:30,reward:'skin',id:'season_skin_1'},
+    {level:50,reward:'gems',amount:500},
+    {level:75,reward:'badge',id:'free_player'},
+    {level:100,reward:'gems',amount:1000}
+  ],
+  premium:[
+    {level:5,reward:'gems',amount:200},
+    {level:15,reward:'skin',id:'premium_skin_1'},
+    {level:25,reward:'gems',amount:500},
+    {level:35,reward:'pet',id:'exclusive_pet'},
+    {level:50,reward:'gems',amount:1000},
+    {level:75,reward:'skin',id:'premium_skin_2'},
+    {level:100,reward:'gems',amount:2000}
+  ]
+};
+
+// ─── ペットガチャシステム ───────────────────────────────────
+var gacha={
+  totalPulls:0,
+  pityCounter:0,
+  pityThreshold:100,
+  lastPullTime:0,
+  pullHistory:[]
+};
+
+var GACHA_RATES={
+  common:0.40,
+  rare:0.35,
+  epic:0.20,
+  legendary:0.05
+};
+
+// ─── 広告システム ───────────────────────────────────────────
+var adSystem={
+  rewardAdWatched:0,
+  dailyRewardAdLimit:5,
+  lastRewardAdTime:0,
+  interstitialAdShown:0,
+  bannerAdVisible:true
+};
+
+// ─── 販売管理システム ───────────────────────────────────────
+var salesAnalytics={
+  totalRevenue:0,
+  totalPurchases:0,
+  arpu:0,
+  dailyRevenue:[],
+  monthlyRevenue:0,
+  topItems:[]
+};
 // MEGA FEATURES: リアルタイムイベント、ダイナミック環境、ペットシステム
 // ════════════════════════════════════════════════════════════════
 
@@ -3783,6 +3898,304 @@ function drawPetUI(){
     ctx.font='12px Arial';
     var petName=PET_TYPES[pet.type].name;
     ctx.fillText(petName+' Lv'+pet.level+' HP:'+Math.floor(pet.hp),15,yPos+12);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// プレミアムジェムシステム関数
+// ════════════════════════════════════════════════════════════════
+
+function purchaseGems(packageId){
+  var pkg=GEM_PACKAGES.find(function(p){return p.id===packageId;});
+  if(!pkg)return;
+  
+  // 実際の決済処理（Stripe/PayPal統合）
+  console.log('💳 購入開始: '+pkg.label+' - $'+pkg.price);
+  
+  // シミュレーション：購入成功
+  gemSystem.totalGems+=pkg.gems;
+  gemSystem.purchaseHistory.push({
+    packageId:packageId,
+    gems:pkg.gems,
+    price:pkg.price,
+    timestamp:Date.now()
+  });
+  
+  salesAnalytics.totalRevenue+=pkg.price;
+  salesAnalytics.totalPurchases++;
+  salesAnalytics.arpu=salesAnalytics.totalRevenue/Math.max(1,Math.floor(fr/3600));
+  
+  addFloat(400,300,'💎 +'+pkg.gems+' GEMS!','#00ff00',2);
+  SFX.ulti();
+  
+  // 初回購入ボーナス
+  if(gemSystem.purchaseHistory.length===1){
+    gemSystem.totalGems+=pkg.gems; // 2倍
+    addFloat(400,250,'🎁 初回購入ボーナス!','#ffff00',2);
+  }
+}
+
+function useGems(amount){
+  if(gemSystem.totalGems>=amount){
+    gemSystem.totalGems-=amount;
+    return true;
+  }
+  return false;
+}
+
+// ════════════════════════════════════════════════════════════════
+// コスメティックショップ関数
+// ════════════════════════════════════════════════════════════════
+
+function buyCosmeticItem(type,itemId){
+  var items=COSMETIC_ITEMS[type];
+  var item=items.find(function(i){return i.id===itemId;});
+  if(!item)return;
+  
+  if(useGems(item.price)){
+    if(type==='skins'){
+      cosmetics.ownedSkins.push(itemId);
+      cosmetics.selectedSkin=itemId;
+    }else if(type==='trails'){
+      cosmetics.ownedTrails.push(itemId);
+      cosmetics.selectedTrail=itemId;
+    }else if(type==='themes'){
+      cosmetics.ownedThemes.push(itemId);
+      cosmetics.selectedTheme=itemId;
+    }
+    
+    addFloat(400,300,'✨ '+item.name+' GET!','#ff00ff',2);
+    SFX.event();
+    
+    // 販売分析
+    if(!salesAnalytics.topItems[itemId]){
+      salesAnalytics.topItems[itemId]=0;
+    }
+    salesAnalytics.topItems[itemId]++;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// バトルパスシステム関数
+// ════════════════════════════════════════════════════════════════
+
+function purchaseBattlePass(){
+  if(battlePass.hasPremiumPass)return;
+  
+  if(useGems(499)){ // 499ジェム = $4.99相当
+    battlePass.hasPremiumPass=true;
+    addFloat(400,300,'🎫 プレミアムパス GET!','#ffff00',2);
+    SFX.ulti();
+  }
+}
+
+function updateBattlePassProgress(){
+  var baseProgress=Math.floor(score/1000);
+  battlePass.freeProgress=Math.min(baseProgress,battlePass.maxProgress);
+  
+  if(battlePass.hasPremiumPass){
+    battlePass.premiumProgress=Math.min(baseProgress*1.5,battlePass.maxProgress);
+  }
+}
+
+function claimBattlePassReward(level){
+  var rewards=battlePass.hasPremiumPass?BATTLE_PASS_REWARDS.premium:BATTLE_PASS_REWARDS.free;
+  var reward=rewards.find(function(r){return r.level===level;});
+  if(!reward)return;
+  
+  switch(reward.reward){
+    case 'gems':
+      gemSystem.totalGems+=reward.amount;
+      addFloat(400,300,'💎 +'+reward.amount+' GEMS!','#00ff00',2);
+      break;
+    case 'skin':
+      cosmetics.ownedSkins.push(reward.id);
+      addFloat(400,300,'✨ スキン GET!','#ff00ff',2);
+      break;
+    case 'pet':
+      petSystem.activePets.push({type:'exclusive',level:1,atk:20,def:10,hp:60});
+      addFloat(400,300,'🐾 ペット GET!','#ff00ff',2);
+      break;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// ペットガチャシステム関数
+// ════════════════════════════════════════════════════════════════
+
+function pullGacha(times){
+  var cost=times===1?50:450; // 1回50ジェム、10回450ジェム（10%割引）
+  
+  if(!useGems(cost))return;
+  
+  for(var i=0;i<times;i++){
+    var roll=Math.random();
+    var rarity='common';
+    
+    if(roll<GACHA_RATES.legendary){
+      rarity='legendary';
+    }else if(roll<GACHA_RATES.legendary+GACHA_RATES.epic){
+      rarity='epic';
+    }else if(roll<GACHA_RATES.legendary+GACHA_RATES.epic+GACHA_RATES.rare){
+      rarity='rare';
+    }
+    
+    // ランダムなペットを取得
+    var petKeys=Object.keys(PET_TYPES);
+    var petType=petKeys[Math.floor(Math.random()*petKeys.length)];
+    var pet=PET_TYPES[petType];
+    
+    var newPet={
+      type:petType,
+      level:1,
+      rarity:rarity,
+      atk:pet.baseStats.atk,
+      def:pet.baseStats.def,
+      hp:pet.baseStats.hp
+    };
+    
+    if(petSystem.activePets.length<5){
+      petSystem.activePets.push(newPet);
+    }
+    
+    gacha.totalPulls++;
+    gacha.pityCounter++;
+    gacha.pullHistory.push({petType:petType,rarity:rarity,timestamp:Date.now()});
+    
+    // 天井システム（100回でレジェンダリー確定）
+    if(gacha.pityCounter>=gacha.pityThreshold){
+      gacha.pityCounter=0;
+      addFloat(400,300,'🎊 天井到達!','#ffff00',2);
+    }
+  }
+  
+  addFloat(400,300,'🎲 ガチャ完了!','#ff00ff',2);
+  SFX.event();
+}
+
+// ════════════════════════════════════════════════════════════════
+// 広告システム関数
+// ════════════════════════════════════════════════════════════════
+
+function watchRewardAd(){
+  if(adSystem.rewardAdWatched>=adSystem.dailyRewardAdLimit){
+    addFloat(400,300,'本日の広告視聴上限に達しました','#ff0000',2);
+    return;
+  }
+  
+  // 広告再生（Google AdMob/Unity Ads統合）
+  console.log('📺 リワード広告を再生中...');
+  
+  // シミュレーション：広告視聴完了
+  setTimeout(function(){
+    var rewardGems=Math.floor(Math.random()*40)+10; // 10-50ジェム
+    gemSystem.totalGems+=rewardGems;
+    adSystem.rewardAdWatched++;
+    adSystem.lastRewardAdTime=Date.now();
+    
+    addFloat(400,300,'💎 +'+rewardGems+' (広告報酬)','#00ff00',2);
+  },3000);
+}
+
+function showInterstitialAd(){
+  if(Math.random()<0.3){ // 30%の確率で広告表示
+    console.log('📺 インタースティシャル広告を表示中...');
+    // 広告表示ロジック
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// 販売分析関数
+// ════════════════════════════════════════════════════════════════
+
+function updateSalesAnalytics(){
+  var today=new Date().toDateString();
+  if(!salesAnalytics.dailyRevenue[today]){
+    salesAnalytics.dailyRevenue[today]=0;
+  }
+  
+  // 月間売上計算
+  var now=Date.now();
+  var monthAgo=now-30*24*60*60*1000;
+  salesAnalytics.monthlyRevenue=gemSystem.purchaseHistory
+    .filter(function(p){return p.timestamp>monthAgo;})
+    .reduce(function(sum,p){return sum+p.price;},0);
+}
+
+function displaySalesReport(){
+  console.log('═══════════════════════════════════════');
+  console.log('📊 売上レポート');
+  console.log('═══════════════════════════════════════');
+  console.log('総売上: $'+salesAnalytics.totalRevenue.toFixed(2));
+  console.log('総購入数: '+salesAnalytics.totalPurchases);
+  console.log('ARPU: $'+salesAnalytics.arpu.toFixed(2));
+  console.log('月間売上: $'+salesAnalytics.monthlyRevenue.toFixed(2));
+  console.log('═══════════════════════════════════════');
+}
+
+// ════════════════════════════════════════════════════════════════
+// 収益化UI描画関数
+// ════════════════════════════════════════════════════════════════
+
+function drawMonetizationUI(){
+  // ジェム表示
+  ctx.fillStyle='#00ff00';
+  ctx.font='bold 16px Arial';
+  ctx.fillText('💎 Gems: '+gemSystem.totalGems,700,30);
+  
+  // バトルパス進行度表示
+  if(battlePass.freeProgress>0||battlePass.hasPremiumPass){
+    ctx.fillStyle='#ffff00';
+    ctx.font='bold 14px Arial';
+    var passText=battlePass.hasPremiumPass?'[PREMIUM]':'[FREE]';
+    ctx.fillText('Pass: '+battlePass.freeProgress+'/'+battlePass.maxProgress+' '+passText,700,50);
+  }
+  
+  // ペットガチャ情報
+  if(gacha.totalPulls>0){
+    ctx.fillStyle='#ff00ff';
+    ctx.font='12px Arial';
+    ctx.fillText('Gacha: '+gacha.totalPulls+' pulls | Pity: '+gacha.pityCounter+'/'+gacha.pityThreshold,700,70);
+  }
+  
+  // 広告情報
+  if(adSystem.rewardAdWatched<adSystem.dailyRewardAdLimit){
+    ctx.fillStyle='#00ffff';
+    ctx.font='12px Arial';
+    ctx.fillText('📺 広告: '+adSystem.rewardAdWatched+'/'+adSystem.dailyRewardAdLimit,700,90);
+  }
+}
+
+function drawShopMenu(){
+  ctx.fillStyle='rgba(0,0,0,0.8)';
+  ctx.fillRect(100,100,600,500);
+  
+  ctx.fillStyle='#ffff00';
+  ctx.font='bold 24px Arial';
+  ctx.fillText('SHOP',300,140);
+  
+  // ジェムパッケージ表示
+  ctx.fillStyle='#00ff00';
+  ctx.font='bold 14px Arial';
+  ctx.fillText('💎 ジェムパッケージ',120,180);
+  
+  GEM_PACKAGES.forEach(function(pkg,idx){
+    var y=220+idx*40;
+    ctx.fillStyle='#ffffff';
+    ctx.font='12px Arial';
+    ctx.fillText(pkg.label+' - $'+pkg.price,140,y);
+  });
+  
+  // コスメティック表示
+  ctx.fillStyle='#ff00ff';
+  ctx.font='bold 14px Arial';
+  ctx.fillText('✨ スキン',350,180);
+  
+  COSMETIC_ITEMS.skins.slice(0,3).forEach(function(skin,idx){
+    var y=220+idx*40;
+    ctx.fillStyle='#ffffff';
+    ctx.font='12px Arial';
+    ctx.fillText(skin.name+' - '+skin.price+'💎',370,y);
   });
 }
 </script>
