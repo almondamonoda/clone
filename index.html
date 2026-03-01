@@ -555,22 +555,77 @@ var BOSSES=[
 // ── Game state ──
 
 // ════════════════════════════════════════════
-// AWAKENING SYSTEM
+// TACTICAL UPGRADES - タクティカル・アップグレード
 // ════════════════════════════════════════════
-var awakeningActive=false,awakeningTimer=0,awakeningMaxTimer=300,awakeningThreshold=50;
-function triggerAwakening(){
-  if(awakeningActive)return;
-  awakeningActive=true;awakeningTimer=awakeningMaxTimer;
-  addFloat(W/2,H*.3,'✨ AWAKENING ✨','#ffd60a',2.8);
-  SFX.ulti();SFX.fever();shake(20);sf(255,214,10,.6);
-  addEffect('rage',awakeningMaxTimer);addEffect('rapid',awakeningMaxTimer);
-  addEffect('homing',awakeningMaxTimer);addEffect('chain',awakeningMaxTimer);
-  spawnParts(px,py,'#ffd60a',30);spawnRing(px,py,'#ffd60a',120,5);
+var TACTICAL_CHIPS=[
+  {id:'rapid_fire',name:'🔫 RAPID FIRE',desc:'連射速度+50%',icon:'⚡',effect:function(){addEffect('rapid',600);}},
+  {id:'piercing',name:'💥 PIERCING',desc:'貫通弾+ダメージ×1.5',icon:'🎯',effect:function(){addEffect('homing',600);}},
+  {id:'shield_gen',name:'🛡 SHIELD GEN',desc:'シールド+3',icon:'💙',effect:function(){shields=Math.min(shields+3,8);}},
+  {id:'score_boost',name:'💰 SCORE BOOST',desc:'スコア×2',icon:'✨',effect:function(){scoreMult=Math.min(scoreMult+2,8);}},
+  {id:'health_regen',name:'❤ REGEN',desc:'HP回復+50',icon:'💚',effect:function(){pHP=Math.min(pHP+50,pMaxHP);}},
+];
+
+var tacticalChipsEarned=[];
+var dmgMultiplier=1,critChance=0.1;
+
+function offerTacticalChips(){
+  if(wave%3!==0||wave<3)return;
+  var available=TACTICAL_CHIPS.filter(function(c){return tacticalChipsEarned.indexOf(c.id)<0;});
+  if(available.length<3)available=TACTICAL_CHIPS.slice();
+  available=available.sort(function(){return Math.random()-0.5;}).slice(0,3);
+  
+  var el=document.getElementById('pn');if(!el)return;
+  var h='<div class="pt" style="color:#c084fc;letter-spacing:2px;">⚙ TACTICAL UPGRADE</div>'+
+    '<div style="font-size:8px;color:rgba(255,255,255,.3);margin-bottom:8px;">Wave '+wave+' - Choose one</div>'+
+    '<div style="display:flex;flex-direction:column;gap:6px;width:100%;">';
+  
+  available.forEach(function(chip,i){
+    h+='<div onclick="selectTacticalChip('+i+')" style="cursor:pointer;padding:10px;background:rgba(192,132,252,.1);border:1.5px solid #c084fc;border-radius:4px;">'+
+      '<div style="font-size:12px;margin-bottom:2px;">'+chip.icon+' '+chip.name+'</div>'+
+      '<div style="font-size:7px;color:rgba(255,255,255,.5);">'+chip.desc+'</div>'+
+      '</div>';
+  });
+  
+  h+='</div>';
+  el.innerHTML=h;
+  document.getElementById('ov').style.display='flex';
+  window.tacticalChipsAvailable=available;
 }
-function updateAwakening(){
-  if(!awakeningActive)return;
-  awakeningTimer--;
-  if(awakeningTimer<=0){awakeningActive=false;addFloat(px,py-30,'Awakening End','#c084fc',1.5);}
+
+function selectTacticalChip(idx){
+  var chip=window.tacticalChipsAvailable[idx];
+  if(!chip)return;
+  tacticalChipsEarned.push(chip.id);
+  chip.effect();
+  addFloat(W/2,H*.3,chip.icon+' '+chip.name+' ACQUIRED!','#c084fc',2.5);
+  SFX.upg();hideOv();
+}
+
+
+// ════════════════════════════════════════════
+// DYNAMIC CAMERA & PARTICLE OVERDRIVE
+// ════════════════════════════════════════════
+var cameraZoom=1,cameraShakeIntensity=0;
+
+function updateDynamicCamera(){
+  if(typeof awakeningActive!=='undefined'&&awakeningActive){
+    cameraZoom=1+Math.sin(fr*0.08)*0.08;
+    cameraShakeIntensity=Math.max(cameraShakeIntensity,2);
+  }else if(feverActive){
+    cameraZoom=1+Math.sin(fr*0.05)*0.04;
+  }else{
+    cameraZoom=1;
+  }
+  cameraShakeIntensity*=0.92;
+}
+
+function triggerParticleExplosion(x,y,col,intensity){
+  for(var i=0;i<intensity*3;i++){
+    var a=Math.random()*Math.PI*2;
+    var sp=2+Math.random()*12;
+    parts.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,dec:.015,col:col,r:1.5+Math.random()*3});
+  }
+  cameraShakeIntensity=Math.max(cameraShakeIntensity,intensity*0.5);
 }
 
 var running=false,paused=false,gmode='single',bdiff='normal',retryFn=null;
@@ -822,9 +877,7 @@ var fever=0,FMAX=100,feverActive=false,feverTimer=0,feverBGT=null;
 var berserkTimer=0,mirrorShield=0,activeSkill=0;
 var blackholes=[];
 var revengeMeter=0,revengeFull=false;
-var SKILLS=[,
-  {em:'⏱',name:'CHRONO',desc:'敵停止',col:'#00ffff',maxCool:300,cool:0,fn:function(){addEffect('slow',360);for(var i=0;i<enemies.length;i++){enemies[i].vx=0;enemies[i].vy=0;}if(bossAlive){bossVX=0;bossVY=0;}addFloat(W/2,H*.3,'⏱ TIME FROZEN','#00ffff',2.2);SFX.ulti();shake(12);}},
-  {em:'👥',name:'DOPPEL',desc:'分身攻撃',col:'#c084fc',maxCool:240,cool:0,fn:function(){addEffect('clone',420);for(var i=0;i<8;i++){var a=Math.PI*2/8*i;pBullets.push(mkB(px,py,a,12,'#c084fc',6,dmg()*1.8,false));}addFloat(px,py,'👥 DOPPELGANGER','#c084fc',2);SFX.skill();}},];
+var SKILLS=[];
 
 var afterImgs=[];
 var screenFlash={r:0,g:0,b:0,a:0};
@@ -1117,7 +1170,7 @@ function doBomb(){
 
 // ── Enemy spawning ──
 function spawnBossRush(stage){
-  enemies=[];eBullets=[];boss=null;bossAlive=false;bossPhase=0;
+  enemies=[];eBullets=[];boss=null;bossAlive=false;
   var bi=(stage-1)%BOSSES.length,loop=Math.floor((stage-1)/BOSSES.length),base=BOSSES[bi];
   var scl=1+loop*.45+stage*.06;
   boss={wave:stage,name:base.name+' Ω'+(loop+1),em:base.em,r:base.r+Math.min(loop*2,12),hp:Math.floor(base.hp*scl),pts:Math.floor(base.pts*(1+loop*.35+stage*.08)),
@@ -1132,7 +1185,7 @@ function spawnBossRush(stage){
 
 function spawnWave(w){
   if(gmode==='bossrush'){spawnBossRush(w);return;}
-  enemies=[];eBullets=[];boss=null;bossAlive=false;bossPhase=0;
+  enemies=[];eBullets=[];boss=null;bossAlive=false;
   for(var _ek in effects){if(_ek!=='chain')effects[_ek]=0;}// keep chain between waves
   var bossDef=null;for(var _bi=0;_bi<BOSSES.length;_bi++){if(BOSSES[_bi].wave===w){bossDef=BOSSES[_bi];break;}}
   if(bossDef){
@@ -1253,7 +1306,7 @@ function updateGodMode(){
 
 // ── Kill boss ──
 function killBoss(){
-  bossAlive=false;bossPhase=0;
+  bossAlive=false;
   bgmBossMode=false;
   waveClearing=true;// ← 先にフラグ。updateEnemies の wave++ をブロック
   wave++;           // ← ここで1回だけカウントアップ
@@ -1439,21 +1492,7 @@ function updateEnemies(){
   }
 }
 
-
-function updateBossPhases(){
-  if(!bossAlive||!boss)return;
-  var hpRatio=bossHP/bossMaxHP;
-  var newPhase=hpRatio<=0.25?3:hpRatio<=0.5?2:hpRatio<=0.75?1:0;
-  if(newPhase>bossPhase){
-    bossPhase=newPhase;
-    var msg=['','⚠ PHASE 2 ⚠','⚠ PHASE 3 ⚠','⚠ FINAL PHASE ⚠'][newPhase];
-    addFloat(bossX,bossY,msg,'#ff2d55',2.5);shake(25);SFX.boss();
-    boss.srate=Math.max(5,boss.srate-2);boss.bsp*=1.2;
-  }
-}
-
 function updateBoss(){
-  updateBossPhases();
   if(!bossAlive||!boss)return;
   bossAngle+=.018+bossPhase*.005;
   var ratio=bossHP/bossMaxHP;
@@ -2651,6 +2690,7 @@ function applyWaveEvent(){
   running=true;
 }
 function onKill(){
+  triggerParticleExplosion(px,py,"#ffd60a",Math.random()*3+2);
   killStreakT=360;// 6秒
   killStreakCount++;
   // STORM GAUGE
@@ -2819,8 +2859,7 @@ function loop(t){
   updateKillStreak();
   updateGodMode();
   updatePlayer();
-  updateAwakening();
-  if(combo>=awakeningThreshold&&!awakeningActive)triggerAwakening();
+  updateDynamicCamera();
   moveBullets(pBullets,true);moveBullets(eBullets,false);moveBullets(botBullets,false);
   if(gmode!=='bot'&&gmode!=='local2p'){updateEnemies();updateBoss();trySpawnElite();checkBossRage();tryWaveEvent();updateMagnet();
     if(!bossAlive&&!miniBossAlive&&wave>0&&wave%7===0&&fr%90===0&&Math.random()<.12){
@@ -2861,7 +2900,7 @@ function baseInit(){
   chaos=0;chaosActive=false;chaosTimer=0;chaosPrevStyle=bgmStyle;var cf=document.getElementById('chaosfill');if(cf)cf.style.width='0%';var cl=document.getElementById('chaoslbl');if(cl){cl.style.opacity='.3';cl.textContent='CHAOS';}
   iframes=0;bcharge=0;bflash=0;ucharge=0;shootCool=0;dashCool=0;dashActive=0;shakeAmt=0;
   pBullets=[];eBullets=[];botBullets=[];parts=[];floats=[];rings=[];powerups=[];
-  enemies=[];boss=null;bossAlive=false;bossPhase=0;miniBossAlive=false;pTrail=[];afterImgs=[];combo=0;comboT=0;comboCrateStep=0;overdrive=0;overdriveActive=0;perfMode='MAX';_fpsEMA=60;
+  enemies=[];boss=null;bossAlive=false;miniBossAlive=false;pTrail=[];afterImgs=[];combo=0;comboT=0;comboCrateStep=0;overdrive=0;overdriveActive=0;perfMode='MAX';_fpsEMA=60;
   curWeapon=0;wUnlocked=[true,false,false,false,false,false,false,false];shields=0;maxCombo=0;
   Object.keys(effects).forEach(function(k){effects[k]=0;});
   PSPD=3.3+getU('speed')*.44;
