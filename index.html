@@ -628,6 +628,80 @@ function triggerParticleExplosion(x,y,col,intensity){
   cameraShakeIntensity=Math.max(cameraShakeIntensity,intensity*0.5);
 }
 
+
+// ════════════════════════════════════════════
+// NEW GAME MODES - 新ゲームモード
+// ════════════════════════════════════════════
+
+// SURVIVAL ARENA - サバイバル・アリーナ
+var survivalTime=0,survivalMaxTime=0,survivalWaveCount=0;
+function startSurvival(){
+  SFX.sel();gmode='survival';retryFn=startSurvival;
+  resize();baseInit();
+  survivalTime=0;survivalMaxTime=0;survivalWaveCount=0;
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderWbar();renderSkillBar();hideOv();
+  addFloat(W/2,H*.3,'🏆 SURVIVAL ARENA START!','#ffd60a',1.8);
+  spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
+}
+
+// BULLET HELL - バレット・ヘル・チャレンジ
+var bulletHellGrazeBonus=0;
+function startBulletHell(){
+  SFX.sel();gmode='bullethell';retryFn=startBulletHell;
+  resize();baseInit();
+  bulletHellGrazeBonus=0;
+  curWeapon=0;wUnlocked=[true,false,false,false,false,false,false,false];
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='none';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderSkillBar();hideOv();
+  addFloat(W/2,H*.3,'💥 BULLET HELL CHALLENGE!','#ff2d55',1.8);
+  addFloat(W/2,H*.2,'グレイズでスコア獲得','#00ffe7',1.5);
+  spawnWave(1);startBGM();raf=requestAnimationFrame(loop);
+}
+
+// BOSS RUSH LEGEND - ボスラッシュ・レジェンド
+var bossRushStage=0,learnedAbilities=[];
+function startBossRushLegend(){
+  SFX.sel();gmode='bossrushlegend';retryFn=startBossRushLegend;
+  resize();baseInit();
+  bossRushStage=0;learnedAbilities=[];
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='flex';
+  var _vd=document.getElementById('vshud');if(_vd)_vd.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='flex';
+  renderWbar();renderSkillBar();hideOv();
+  addFloat(W/2,H*.3,'👑 BOSS RUSH LEGEND!','#c084fc',1.8);
+  spawnBossRushLegend(1);startBGM();raf=requestAnimationFrame(loop);
+}
+
+function spawnBossRushLegend(stage){
+  enemies=[];eBullets=[];boss=null;bossAlive=false;
+  bossRushStage=stage;
+  var bi=(stage-1)%BOSSES.length;
+  var base=BOSSES[bi];
+  var scl=1+stage*0.3;
+  boss={wave:stage,name:base.name+' LEGEND',em:base.em,r:base.r+5,hp:Math.floor(base.hp*scl*1.5),pts:Math.floor(base.pts*(1+stage*0.5)),
+    col:base.col,bsp:base.bsp*(1+stage*0.1),srate:Math.max(5,base.srate-stage),spread:Math.min(40,base.spread+stage*2),pattern:base.pattern};
+  bossAlive=true;bossX=W/2;bossY=H*.2;bossVX=1.2;bossVY=0;
+  bossHP=bossMaxHP=boss.hp;bossPhase=0;bossFlash=0;bossAngle=0;bossShootT=boss.srate;
+  SFX.boss();bgmBossMode=true;bgmFeverMode=false;
+  addFloat(W/2,H*.34,'☠ BOSS RUSH LEGEND STAGE '+stage,'#ff2d55',1.9);
+  addFloat(W/2,H*.27,boss.em+' '+boss.name,boss.col,1.5);
+  document.getElementById('h-wv').textContent='LEGEND'+stage;
+}
+
+// ラーニングシステム
+function learnBossAbility(){
+  if(!boss)return;
+  var abilityName=boss.name.split(' ')[0];
+  learnedAbilities.push(abilityName);
+  addFloat(W/2,H*.35,'📚 LEARNED: '+abilityName+'!','#c084fc',2);
+  SFX.upg();
+}
+
 var running=false,paused=false,gmode='single',bdiff='normal',retryFn=null;
 var racePlayerProg=0,raceRivalProg=0,raceGoal=9000,raceRivalBase=5.2,raceFinished=false;
 var carPlayerProg=0,carRivalProg=0,carGoal=12000,carRivalBase=6.4,carFinished=false,carTurbo=0;
@@ -2872,6 +2946,23 @@ function loop(t){
   if(gmode==='fighter')updateFighter();
   if(gmode==='race')updateRaceMode();
   if(gmode==='car')updateCarMode();
+  if(gmode==='bullethell'){
+    if(grazeCount>0&&grazeTimer===0){
+      var bonus=Math.floor(grazeCount*50);
+      score+=bonus;
+      bulletHellGrazeBonus+=bonus;
+      grazeCount=0;
+    }
+  }
+
+  if(gmode==='survival'){
+    survivalTime++;survivalMaxTime=Math.max(survivalMaxTime,survivalTime);
+    if(fr%300===0){survivalWaveCount++;wave=survivalWaveCount;spawnWave(wave);}
+    if(enemies.filter(function(e){return e.alive;}).length===0&&!bossAlive){
+      setTimeout(function(){if(running)spawnWave(survivalWaveCount+1);},800);
+    }
+  }
+
   for(var _pi=parts.length-1;_pi>=0;_pi--){var _p=parts[_pi];_p.x+=_p.vx;_p.y+=_p.vy;_p.vy+=.09;_p.vx*=.97;_p.life-=_p.dec;if(_p.life<=0){parts[_pi]=parts[parts.length-1];parts.pop();}}
   if(parts.length>_maxParts)parts.length=_maxParts;
   if(eBullets.length>_maxEBullets)eBullets.length=_maxEBullets;
