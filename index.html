@@ -900,6 +900,213 @@ function updateDimensionShift(){
   }
 }
 
+
+// ════════════════════════════════════════════
+// CYBER FISHING MODE - サイバー・フィッシング
+// ════════════════════════════════════════════
+var fishingMode=false,fishingTimer=0,fishingCaught=0,fishingRod=0,fishingTension=0;
+var fishData=[
+  {name:'🐠 DATA FISH',rarity:1,value:10,color:'#00ffe7'},
+  {name:'🐟 CYBER CARP',rarity:2,value:25,color:'#00ffff'},
+  {name:'🦈 NEON SHARK',rarity:3,value:50,color:'#ff00ff'},
+  {name:'🐙 VOID SQUID',rarity:4,value:100,color:'#ff0080'},
+];
+
+function startCyberFishing(){
+  SFX.sel();gmode='fishing';retryFn=startCyberFishing;fishingMode=true;
+  resize();baseInit();fishingTimer=0;fishingCaught=0;fishingRod=W/2;fishingTension=0;
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='none';
+  hideOv();
+  addFloat(W/2,H*.3,'🎣 CYBER FISHING START!','#00ffe7',1.8);
+  addFloat(W/2,H*.2,'マウス移動で竿操作・クリックで釣る','#00ffe7',1.5);
+  startBGM();raf=requestAnimationFrame(loop);
+}
+
+function updateFishing(){
+  if(!fishingMode)return;
+  fishingTimer++;
+  
+  // ランダムに魚が釣れるチャンス
+  if(Math.random()<0.02&&fishingTension<50){
+    fishingTension+=Math.random()*30;
+  }
+  
+  // 緊張度が高まると魚が釣れる
+  if(fishingTension>100){
+    var fish=fishData[Math.floor(Math.random()*fishData.length)];
+    fishingCaught++;
+    GEM+=fish.value;
+    addFloat(W/2,H*.3,fish.name+' GET! +'+fish.value+'💎','#ffd60a',1.8);
+    SFX.upg();
+    fishingTension=0;
+  }
+  
+  // 緊張度の減衰
+  fishingTension=Math.max(0,fishingTension-0.5);
+}
+
+function drawFishingUI(){
+  ctx.fillStyle='rgba(0,255,231,.1)';
+  ctx.fillRect(W/2-150,H*.2,300,30);
+  ctx.strokeStyle='#00ffe7';ctx.lineWidth=2;ctx.strokeRect(W/2-150,H*.2,300,30);
+  
+  // 緊張度バー
+  ctx.fillStyle='#00ffe7';
+  ctx.fillRect(W/2-145,H*.205,fishingTension*2.9,20);
+  
+  // 釣った数
+  ctx.fillStyle='#ffd60a';ctx.font='bold 14px Arial';
+  ctx.fillText('CAUGHT: '+fishingCaught,W/2-100,H*.45);
+}
+
+
+// ════════════════════════════════════════════
+// NEON RHYTHM SLASH MODE - ネオン・リズム・スラッシュ
+// ════════════════════════════════════════════
+var rhythmMode=false,rhythmNotes=[],rhythmScore=0,rhythmCombo=0,rhythmBeat=0;
+var rhythmLanes=[{x:W*.2,color:'#ff00ff'},{x:W*.4,color:'#00ffff'},{x:W*.6,color:'#ffd60a'},{x:W*.8,color:'#ff2d55'}];
+
+function startNeonRhythm(){
+  SFX.sel();gmode='rhythm';retryFn=startNeonRhythm;rhythmMode=true;
+  resize();baseInit();rhythmNotes=[];rhythmScore=0;rhythmCombo=0;rhythmBeat=0;
+  var wb=document.getElementById('wbar');if(wb)wb.style.display='none';
+  var sb2=document.getElementById('sbar');if(sb2)sb2.style.display='none';
+  hideOv();
+  addFloat(W/2,H*.3,'🎵 NEON RHYTHM SLASH!','#ff00ff',1.8);
+  addFloat(W/2,H*.2,'ビートに合わせて[1][2][3][4]キーを押す','#ff00ff',1.5);
+  generateRhythmNotes();
+  startBGM();raf=requestAnimationFrame(loop);
+}
+
+function generateRhythmNotes(){
+  for(var i=0;i<60;i++){
+    rhythmNotes.push({
+      lane:Math.floor(Math.random()*4),
+      time:i*15,
+      hit:false,
+      y:0
+    });
+  }
+}
+
+function updateRhythm(){
+  if(!rhythmMode)return;
+  rhythmBeat++;
+  
+  // ノーツの下降
+  for(var i=0;i<rhythmNotes.length;i++){
+    var note=rhythmNotes[i];
+    note.y=rhythmBeat-note.time;
+    if(note.y>H&&!note.hit){rhythmCombo=0;}
+  }
+}
+
+function drawRhythmUI(){
+  // レーン描画
+  for(var i=0;i<rhythmLanes.length;i++){
+    var lane=rhythmLanes[i];
+    ctx.strokeStyle=lane.color;ctx.lineWidth=3;
+    ctx.strokeRect(lane.x-30,H*.7,60,100);
+  }
+  
+  // ノーツ描画
+  ctx.fillStyle='rgba(255,255,255,.7)';
+  for(var i=0;i<rhythmNotes.length;i++){
+    var note=rhythmNotes[i];
+    if(note.y>0&&note.y<H){
+      var lane=rhythmLanes[note.lane];
+      ctx.fillRect(lane.x-20,H*.7-note.y,40,20);
+    }
+  }
+  
+  // スコア表示
+  ctx.fillStyle='#ff00ff';ctx.font='bold 20px Arial';
+  ctx.fillText('SCORE: '+rhythmScore,20,40);
+  ctx.fillText('COMBO: '+rhythmCombo,20,70);
+}
+
+function checkRhythmInput(lane){
+  for(var i=rhythmNotes.length-1;i>=0;i--){
+    var note=rhythmNotes[i];
+    if(note.lane===lane&&!note.hit&&Math.abs(note.y-80)<15){
+      note.hit=true;
+      rhythmScore+=100*(rhythmCombo+1);
+      rhythmCombo++;
+      addFloat(rhythmLanes[lane].x,H*.7-note.y,'PERFECT!','#ffd60a',1.2);
+      SFX.skill();
+      return;
+    }
+  }
+  rhythmCombo=0;
+}
+
+
+// ════════════════════════════════════════════
+// BUDDY PET SYSTEM - バディ・ペット
+// ════════════════════════════════════════════
+var petActive=false,petType=0,petLevel=1,petExp=0,petMaxExp=100;
+var petTypes=[
+  {name:'🤖 CYBER BOT',skill:'自動射撃',color:'#00ffe7'},
+  {name:'🦾 MECHA ARM',skill:'敵吸引',color:'#ff00ff'},
+  {name:'🛸 UFO DRONE',skill:'範囲爆発',color:'#ffd60a'},
+];
+
+function activatePet(){
+  if(!petActive){
+    petActive=true;
+    petType=Math.floor(Math.random()*petTypes.length);
+    addFloat(px,py-50,petTypes[petType].name+' ACTIVATED!','#00ffe7',1.5);
+    SFX.upg();
+  }
+}
+
+function updatePet(){
+  if(!petActive)return;
+  
+  // ペットの経験値獲得
+  petExp+=Math.random()*0.5;
+  
+  // レベルアップ
+  if(petExp>=petMaxExp){
+    petLevel++;
+    petExp=0;
+    petMaxExp=Math.floor(petMaxExp*1.2);
+    addFloat(W/2,H*.3,petTypes[petType].name+' LV'+petLevel+'!','#ffd60a',1.5);
+    SFX.boss();
+  }
+  
+  // ペットの自動攻撃
+  if(petLevel>=3&&Math.random()<0.05){
+    var target=enemies[Math.floor(Math.random()*enemies.length)];
+    if(target){
+      var angle=Math.atan2(target.y-py,target.x-px);
+      pBullets.push({
+        x:px,y:py,vx:Math.cos(angle)*6,vy:Math.sin(angle)*6,
+        life:60,r:4,color:'#00ffe7',dmg:5
+      });
+    }
+  }
+}
+
+function drawPetUI(){
+  if(!petActive)return;
+  var pet=petTypes[petType];
+  ctx.fillStyle='rgba(0,255,231,.1)';
+  ctx.fillRect(W-150,10,140,60);
+  ctx.strokeStyle='#00ffe7';ctx.lineWidth=2;ctx.strokeRect(W-150,10,140,60);
+  
+  ctx.fillStyle='#00ffe7';ctx.font='bold 12px Arial';
+  ctx.fillText(pet.name,W-145,30);
+  ctx.fillText('LV'+petLevel+' '+pet.skill,W-145,50);
+  
+  // EXP バー
+  ctx.fillStyle='rgba(0,255,231,.3)';
+  ctx.fillRect(W-145,55,130,5);
+  ctx.fillStyle='#00ffe7';
+  ctx.fillRect(W-145,55,130*(petExp/petMaxExp),5);
+}
+
 var running=false,paused=false,gmode='single',bdiff='normal',retryFn=null;
 var racePlayerProg=0,raceRivalProg=0,raceGoal=9000,raceRivalBase=5.2,raceFinished=false;
 var carPlayerProg=0,carRivalProg=0,carGoal=12000,carRivalBase=6.4,carFinished=false,carTurbo=0;
@@ -3134,6 +3341,9 @@ function loop(t){
   updateDynamicCamera();
   updateParkourPhysics();
   updateDimensionShift();
+  updateFishing();
+  updateRhythm();
+  updatePet();
   moveBullets(pBullets,true);moveBullets(eBullets,false);moveBullets(botBullets,false);
   if(gmode!=='bot'&&gmode!=='local2p'){updateEnemies();updateBoss();trySpawnElite();checkBossRage();tryWaveEvent();updateMagnet();
     if(!bossAlive&&!miniBossAlive&&wave>0&&wave%7===0&&fr%90===0&&Math.random()<.12){
@@ -3536,11 +3746,12 @@ function hideOv(){var _o=document.getElementById('ov');_o.className='h';_o.style
 function showPanel(h){document.getElementById('pn').innerHTML=h;document.getElementById('ov').className='';}
 
 
+
 function showUltimateHub(){
   var el=document.getElementById('pn');if(!el)return;
   var h='<div class="pt" style="color:#ff00ff;letter-spacing:4px;font-size:16px;text-shadow:0 0 10px #ff00ff;">⚡ ULTIMATE HUB ⚡</div>'+
     '<div style="font-size:8px;color:rgba(255,255,255,.3);margin-bottom:15px;text-align:center;">Choose your reality</div>'+
-    '<div style="display:grid;grid-template-columns:1fr;gap:10px;width:100%;max-height:300px;overflow-y:auto;padding-right:5px;">'+
+    '<div style="display:grid;grid-template-columns:1fr;gap:10px;width:100%;max-height:400px;overflow-y:auto;padding-right:5px;">'+
     
     // CYBER PARKOUR
     '<div onclick="startCyberParkour()" style="cursor:pointer;padding:14px;background:linear-gradient(135deg,rgba(0,255,255,.15),rgba(0,255,255,.05));border:2px solid #00ffff;border-radius:8px;transition:all .3s;text-align:center;box-shadow:0 0 15px rgba(0,255,255,.4);">'+
@@ -3552,6 +3763,18 @@ function showUltimateHub(){
     '<div onclick="startCardBattle()" style="cursor:pointer;padding:14px;background:linear-gradient(135deg,rgba(192,132,252,.15),rgba(192,132,252,.05));border:2px solid #c084fc;border-radius:8px;transition:all .3s;text-align:center;box-shadow:0 0 15px rgba(192,132,252,.4);">'+
     '<div style="font-size:18px;margin-bottom:4px;color:#c084fc;">🎴 CARD DUEL</div>'+
     '<div style="font-size:7px;color:rgba(255,255,255,.7);">Strategic deck-building battles</div>'+
+    '</div>'+
+    
+    // CYBER FISHING (NEW)
+    '<div onclick="startCyberFishing()" style="cursor:pointer;padding:14px;background:linear-gradient(135deg,rgba(0,200,255,.15),rgba(0,200,255,.05));border:2px solid #00c8ff;border-radius:8px;transition:all .3s;text-align:center;box-shadow:0 0 15px rgba(0,200,255,.4);">'+
+    '<div style="font-size:18px;margin-bottom:4px;color:#00c8ff;">🎣 CYBER FISHING</div>'+
+    '<div style="font-size:7px;color:rgba(255,255,255,.7);">Catch rare data fish and earn gems</div>'+
+    '</div>'+
+    
+    // NEON RHYTHM SLASH (NEW)
+    '<div onclick="startNeonRhythm()" style="cursor:pointer;padding:14px;background:linear-gradient(135deg,rgba(255,0,200,.15),rgba(255,0,200,.05));border:2px solid #ff00c8;border-radius:8px;transition:all .3s;text-align:center;box-shadow:0 0 15px rgba(255,0,200,.4);">'+
+    '<div style="font-size:18px;margin-bottom:4px;color:#ff00c8;">🎵 RHYTHM SLASH</div>'+
+    '<div style="font-size:7px;color:rgba(255,255,255,.7);">Slash to the beat and master timing</div>'+
     '</div>'+
     
     // SURVIVAL ARENA
@@ -3574,11 +3797,12 @@ function showUltimateHub(){
     
     '</div>'+
     '<div class="sp"></div>'+
-    '<div style="font-size:8px;color:rgba(255,255,255,.4);text-align:center;margin-bottom:10px;">Press [D] to toggle DIMENSION SHIFT</div>'+
+    '<div style="font-size:8px;color:rgba(255,255,255,.4);text-align:center;margin-bottom:10px;">Press [D] to toggle DIMENSION SHIFT | [P] to activate BUDDY PET</div>'+
     '<button class="sb r" onclick="showMenu()">← BACK TO MENU</button>';
   
   showPanel(h);
 }
+
 
 
 function showMenu(){
