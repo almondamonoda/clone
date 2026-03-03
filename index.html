@@ -178,6 +178,418 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Or
 
 <script>
 // ════════════════════════════════════════════
+// PERFORMANCE OPTIMIZATION ENGINE
+// ════════════════════════════════════════════
+
+// オブジェクトプール - 弾の再利用
+var bulletPool=[];
+function getBullet(){
+  return bulletPool.pop()||{x:0,y:0,vx:0,vy:0,life:0,r:0,color:'#fff',dmg:0};
+}
+function returnBullet(b){
+  if(bulletPool.length<500)bulletPool.push(b);
+}
+
+// パーティクルプール
+var particlePool=[];
+function getParticle(){
+  return particlePool.pop()||{x:0,y:0,vx:0,vy:0,life:0,r:0,color:'#fff'};
+}
+function returnParticle(p){
+  if(particlePool.length<1000)particlePool.push(p);
+}
+
+// 描画バッチ処理
+var drawBatch={
+  circles:[],rects:[],texts:[],
+  add:function(type,data){this[type].push(data);},
+  flush:function(){
+    // 円をまとめて描画
+    for(var i=0;i<this.circles.length;i++){
+      var c=this.circles[i];
+      ctx.fillStyle=c.color;ctx.beginPath();ctx.arc(c.x,c.y,c.r,0,Math.PI*2);ctx.fill();
+    }
+    // 矩形をまとめて描画
+    for(var i=0;i<this.rects.length;i++){
+      var r=this.rects[i];
+      ctx.fillStyle=r.color;ctx.fillRect(r.x,r.y,r.w,r.h);
+    }
+    // テキストをまとめて描画
+    for(var i=0;i<this.texts.length;i++){
+      var t=this.texts[i];
+      ctx.fillStyle=t.color;ctx.font=t.font;ctx.fillText(t.text,t.x,t.y);
+    }
+    this.circles=[];this.rects=[];this.texts=[];
+  }
+};
+
+// 衝突判定の最適化（四分木は複雑なので簡易版）
+function checkCollisionFast(a,b){
+  var dx=a.x-b.x,dy=a.y-b.y,dist=Math.hypot(dx,dy);
+  return dist<(a.r||10)+(b.r||10);
+}
+
+// メモリ効率的なタイマー
+var timers={};
+function setTimer(id,duration,callback){
+  timers[id]={time:0,duration:duration,callback:callback};
+}
+function updateTimers(){
+  for(var id in timers){
+    var t=timers[id];
+    t.time++;
+    if(t.time>=t.duration){
+      t.callback();
+      delete timers[id];
+    }
+
+// ════════════════════════════════════════════
+// CYBER PARKOUR - Dedicated Action Engine
+// ════════════════════════════════════════════
+var parkour={
+  active:false,player:{x:W/2,y:H-50,vx:0,vy:0,w:20,h:30,jumping:false,wallSliding:false},
+  obstacles:[],checkpoints:[],level:1,score:0,time:0,
+  
+  start:function(){
+    this.active=true;gmode='parkour';
+    this.player={x:W/2,y:H-50,vx:0,vy:0,w:20,h:30,jumping:false,wallSliding:false};
+    this.obstacles=[];this.checkpoints=[];this.score=0;this.time=0;
+    this.generateLevel(1);
+    SFX.sel();addFloat(W/2,H*.3,'🏃 PARKOUR START','#00ffff',1.5);
+  },
+  
+  generateLevel:function(lv){
+    this.obstacles=[];
+    for(var i=0;i<3+lv;i++){
+      this.obstacles.push({
+        x:100+i*200,y:Math.random()*(H-200)+100,w:60,h:40,
+        type:Math.floor(Math.random()*2),angle:0
+      });
+    }
+    this.checkpoints=[];
+    for(var i=0;i<lv+2;i++){
+      this.checkpoints.push({x:200+i*300,y:H/2,r:25,reached:false});
+    }
+  },
+  
+  update:function(){
+    if(!this.active)return;
+    var p=this.player;
+    this.time++;
+    
+    // 重力
+    p.vy+=0.5;
+    if(p.vy>15)p.vy=15;
+    
+    // 移動
+    if(keys['a']||keys['ArrowLeft'])p.vx=-8;
+    if(keys['d']||keys['ArrowRight'])p.vx=8;
+    p.vx*=0.9;
+    
+    p.x+=p.vx;p.y+=p.vy;
+    
+    // 画面端
+    if(p.x<0)p.x=0;if(p.x>W)p.x=W;
+    
+    // 床
+    if(p.y>H-30){p.y=H-30;p.vy=0;p.jumping=false;}
+    
+    // ジャンプ
+    if((keys[' ']||keys['w'])&&!p.jumping){p.vy=-12;p.jumping=true;}
+    
+    // 障害物との衝突
+    for(var i=0;i<this.obstacles.length;i++){
+      var o=this.obstacles[i];
+      if(p.x+p.w>o.x&&p.x<o.x+o.w&&p.y+p.h>o.y&&p.y<o.y+o.h){
+        // ゲームオーバー
+        addFloat(W/2,H*.3,'💥 FAILED','#ff2d55',1.5);
+        SFX.hit();
+        this.active=false;
+      }
+    }
+    
+    // チェックポイント判定
+    for(var i=0;i<this.checkpoints.length;i++){
+      var cp=this.checkpoints[i];
+      if(!cp.reached&&Math.hypot(p.x-cp.x,p.y-cp.y)<cp.r+p.w){
+        cp.reached=true;
+        this.score+=100;
+        addFloat(cp.x,cp.y-30,'✓ CHECKPOINT','#ffd60a',1.2);
+        SFX.upg();
+      }
+    }
+  },
+  
+  draw:function(){
+    if(!this.active)return;
+    var p=this.player;
+    
+    // プレイヤー
+    ctx.fillStyle='#00ffff';ctx.fillRect(p.x-p.w/2,p.y-p.h/2,p.w,p.h);
+    
+    // 障害物
+    ctx.fillStyle='#ff2d55';
+    for(var i=0;i<this.obstacles.length;i++){
+      var o=this.obstacles[i];
+      ctx.fillRect(o.x,o.y,o.w,o.h);
+    }
+    
+    // チェックポイント
+    ctx.strokeStyle='#ffd60a';ctx.lineWidth=2;
+    for(var i=0;i<this.checkpoints.length;i++){
+      var cp=this.checkpoints[i];
+      ctx.beginPath();ctx.arc(cp.x,cp.y,cp.r,0,Math.PI*2);ctx.stroke();
+    }
+    
+    // UI
+    ctx.fillStyle='#00ffff';ctx.font='bold 16px Arial';
+    ctx.fillText('TIME: '+Math.floor(this.time/60),20,40);
+    ctx.fillText('SCORE: '+this.score,20,70);
+  }
+};
+
+
+// ════════════════════════════════════════════
+// CARD BATTLE - Dedicated Turn-Based Engine
+// ════════════════════════════════════════════
+var cardBattle={
+  active:false,
+  playerHP:100,enemyHP:100,playerEnergy:5,maxEnergy:5,
+  playerHand:[],enemyHand:[],turn:'player',
+  cardLibrary:[
+    {name:'⚡ BOLT',cost:1,dmg:15,color:'#ffd60a'},
+    {name:'🔥 INFERNO',cost:3,dmg:35,color:'#ff2d55'},
+    {name:'❄ FREEZE',cost:2,dmg:20,color:'#00ffff'},
+    {name:'💚 HEAL',cost:2,heal:20,color:'#00ff00'},
+  ],
+  
+  start:function(){
+    this.active=true;gmode='cardbattle';
+    this.playerHP=100;this.enemyHP=100;this.playerEnergy=this.maxEnergy;
+    this.playerHand=[];this.enemyHand=[];this.turn='player';
+    this.drawNewHand();
+    SFX.sel();addFloat(W/2,H*.3,'🎴 CARD BATTLE','#c084fc',1.5);
+  },
+  
+  drawNewHand:function(){
+    this.playerHand=[];
+    for(var i=0;i<3;i++){
+      this.playerHand.push(this.cardLibrary[Math.floor(Math.random()*this.cardLibrary.length)]);
+    }
+  },
+  
+  playCard:function(idx){
+    var card=this.playerHand[idx];
+    if(this.playerEnergy<card.cost)return;
+    this.playerEnergy-=card.cost;
+    if(card.dmg)this.enemyHP-=card.dmg;
+    if(card.heal)this.playerHP=Math.min(this.playerHP+card.heal,100);
+    this.playerHand.splice(idx,1);
+    addFloat(W/2,H*.3,card.name,'#ffd60a',1.2);
+    SFX.skill();
+    if(this.enemyHP<=0){
+      addFloat(W/2,H*.3,'🎉 VICTORY','#ffd60a',2);
+      SFX.boss();
+      this.active=false;
+    }else{
+      setTimeout(()=>this.enemyTurn(),500);
+    }
+  },
+  
+  enemyTurn:function(){
+    var card=this.cardLibrary[Math.floor(Math.random()*this.cardLibrary.length)];
+    if(card.dmg)this.playerHP-=card.dmg;
+    addFloat(W/2,H*.2,'ENEMY: '+card.name,'#ff2d55',1.2);
+    SFX.hit();
+    if(this.playerHP<=0){
+      addFloat(W/2,H*.3,'💀 DEFEAT','#ff2d55',2);
+      this.active=false;
+    }else{
+      this.playerEnergy=Math.min(this.playerEnergy+1,this.maxEnergy);
+      this.drawNewHand();
+    }
+  },
+  
+  draw:function(){
+    if(!this.active)return;
+    
+    // HP表示
+    ctx.fillStyle='#c084fc';ctx.font='bold 16px Arial';
+    ctx.fillText('YOU: '+this.playerHP+'/100',20,40);
+    ctx.fillText('ENEMY: '+this.enemyHP+'/100',W-200,40);
+    
+    // エネルギー表示
+    ctx.fillStyle='#00ffff';ctx.font='12px Arial';
+    ctx.fillText('ENERGY: '+this.playerEnergy+'/'+this.maxEnergy,20,70);
+    
+    // カード表示
+    for(var i=0;i<this.playerHand.length;i++){
+      var card=this.playerHand[i];
+      var x=50+i*120;
+      ctx.fillStyle=card.color;
+      ctx.fillRect(x,H-100,100,80);
+      ctx.fillStyle='#000';ctx.font='bold 12px Arial';
+      ctx.fillText(card.name,x+5,H-70);
+      ctx.fillText('Cost: '+card.cost,x+5,H-50);
+    }
+  }
+};
+
+
+// ════════════════════════════════════════════
+// RHYTHM SLASH - Dedicated Rhythm Engine
+// ════════════════════════════════════════════
+var rhythm={
+  active:false,notes:[],score:0,combo:0,beat:0,bpm:120,
+  lanes:[{x:W*.25,color:'#ff00ff'},{x:W*.5,color:'#00ffff'},{x:W*.75,color:'#ffd60a'}],
+  
+  start:function(){
+    this.active=true;gmode='rhythm';
+    this.notes=[];this.score=0;this.combo=0;this.beat=0;
+    this.generateNotes();
+    SFX.sel();addFloat(W/2,H*.3,'🎵 RHYTHM SLASH','#ff00ff',1.5);
+  },
+  
+  generateNotes:function(){
+    var noteCount=Math.floor(this.bpm*2);
+    for(var i=0;i<noteCount;i++){
+      this.notes.push({
+        lane:Math.floor(Math.random()*this.lanes.length),
+        time:i*10,y:0,hit:false
+      });
+    }
+  },
+  
+  update:function(){
+    if(!this.active)return;
+    this.beat++;
+    
+    for(var i=0;i<this.notes.length;i++){
+      var note=this.notes[i];
+      note.y=this.beat-note.time;
+      if(note.y>H&&!note.hit)this.combo=0;
+    }
+  },
+  
+  hitNote:function(lane){
+    for(var i=this.notes.length-1;i>=0;i--){
+      var note=this.notes[i];
+      if(note.lane===lane&&!note.hit&&Math.abs(note.y-80)<20){
+        note.hit=true;
+        this.score+=100*(this.combo+1);
+        this.combo++;
+        addFloat(this.lanes[lane].x,H*.7-note.y,'PERFECT!','#ffd60a',1.2);
+        SFX.skill();
+        return true;
+      }
+    }
+    this.combo=0;
+    return false;
+  },
+  
+  draw:function(){
+    if(!this.active)return;
+    
+    // ジャッジメントライン
+    ctx.strokeStyle='#fff';ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(0,H*.7);ctx.lineTo(W,H*.7);ctx.stroke();
+    
+    // レーン
+    for(var i=0;i<this.lanes.length;i++){
+      var lane=this.lanes[i];
+      ctx.strokeStyle=lane.color;ctx.lineWidth=4;
+      ctx.strokeRect(lane.x-40,H*.6,80,150);
+    }
+    
+    // ノーツ
+    for(var i=0;i<this.notes.length;i++){
+      var note=this.notes[i];
+      if(note.y>0&&note.y<H){
+        var lane=this.lanes[note.lane];
+        ctx.fillStyle=lane.color;
+        ctx.fillRect(lane.x-30,H*.7-note.y,60,20);
+      }
+    }
+    
+    // スコア
+    ctx.fillStyle='#ff00ff';ctx.font='bold 20px Arial';
+    ctx.fillText('SCORE: '+this.score,20,40);
+    ctx.fillText('COMBO: '+this.combo,20,70);
+  }
+};
+
+
+// ════════════════════════════════════════════
+// CYBER FISHING - Dedicated Fishing Engine
+// ════════════════════════════════════════════
+var fishing={
+  active:false,rodX:W/2,tension:0,caught:0,time:0,
+  fishTypes:[
+    {name:'🐠 DATA FISH',value:10,rarity:1},
+    {name:'🐟 CARP',value:25,rarity:2},
+    {name:'🦈 SHARK',value:50,rarity:3},
+  ],
+  
+  start:function(){
+    this.active=true;gmode='fishing';
+    this.rodX=W/2;this.tension=0;this.caught=0;this.time=0;
+    SFX.sel();addFloat(W/2,H*.3,'🎣 FISHING START','#00c8ff',1.5);
+  },
+  
+  update:function(){
+    if(!this.active)return;
+    this.time++;
+    
+    // マウス追従
+    if(mouseX)this.rodX=mouseX;
+    
+    // ランダムに魚がかかる
+    if(Math.random()<0.01){
+      this.tension=Math.min(100,this.tension+Math.random()*40);
+    }
+    
+    // 緊張度減衰
+    this.tension=Math.max(0,this.tension-0.3);
+    
+    // 釣り上げ
+    if(this.tension>100){
+      var fish=this.fishTypes[Math.floor(Math.random()*this.fishTypes.length)];
+      this.caught++;
+      GEM+=fish.value;
+      addFloat(W/2,H*.3,fish.name+' +'+fish.value+'💎','#ffd60a',1.5);
+      SFX.upg();
+      this.tension=0;
+    }
+  },
+  
+  draw:function(){
+    if(!this.active)return;
+    
+    // 竿
+    ctx.strokeStyle='#00c8ff';ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(this.rodX,H*.2);ctx.lineTo(this.rodX-50,H*.6);ctx.stroke();
+    
+    // 緊張度バー
+    ctx.fillStyle='rgba(0,200,255,.2)';
+    ctx.fillRect(W/2-150,50,300,30);
+    ctx.strokeStyle='#00c8ff';ctx.lineWidth=2;ctx.strokeRect(W/2-150,50,300,30);
+    
+    ctx.fillStyle='#00c8ff';
+    ctx.fillRect(W/2-150,50,this.tension*3,30);
+    
+    // 釣った数
+    ctx.fillStyle='#ffd60a';ctx.font='bold 18px Arial';
+    ctx.fillText('CAUGHT: '+this.caught,20,40);
+    ctx.fillText('TIME: '+Math.floor(this.time/60)+'s',W-150,40);
+  }
+};
+
+
+  }
+}
+
+
+// ════════════════════════════════════════════
 //  BUBBLE WARS EX ∞  — ULTIMATE EDITION
 // ════════════════════════════════════════════
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -5480,6 +5892,34 @@ const multiplayerBattle = new MultiplayerBattle();
 
 console.log('🔥 革新的アップグレード完了！');
 console.log('✨ 5つのレルム、5段階ボス進化、リアルタイムイベント、マルチプレイヤー対戦が実装されました！');
+
+
+
+// ════════════════════════════════════════════
+// OPTIMIZED MAIN LOOP
+// ════════════════════════════════════════════
+function optimizedUpdate(){
+  updateTimers();
+  if(parkour.active)parkour.update();
+  else if(cardBattle.active)cardBattle.update();
+  else if(rhythm.active)rhythm.update();
+  else if(fishing.active)fishing.update();
+}
+
+function optimizedDraw(){
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  if(parkour.active)parkour.draw();
+  else if(cardBattle.active)cardBattle.draw();
+  else if(rhythm.active)rhythm.draw();
+  else if(fishing.active)fishing.draw();
+  drawBatch.flush();
+}
+
+function optimizedLoop(){
+  optimizedUpdate();
+  optimizedDraw();
+  raf=requestAnimationFrame(optimizedLoop);
+}
 
 </script>
 </body>
