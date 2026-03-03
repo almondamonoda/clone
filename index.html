@@ -244,6 +244,200 @@ function updateTimers(){
     }
 
 // ════════════════════════════════════════════
+// ULTRA-LIGHT RENDERING ENGINE
+// ════════════════════════════════════════════
+
+// フレームスキップ & 描画最適化
+var frameSkip=0,renderFrame=true;
+function updateFrameSkip(){
+  frameSkip=(frameSkip+1)%2;
+  renderFrame=frameSkip===0;
+}
+
+// 軽量パーティクルシステム
+var lightParticles=[];
+function spawnLightParticle(x,y,color){
+  if(lightParticles.length>200)return;
+  lightParticles.push({x:x,y:y,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4-2,life:30,color:color});
+}
+
+function updateLightParticles(){
+  for(var i=lightParticles.length-1;i>=0;i--){
+    var p=lightParticles[i];
+    p.x+=p.vx;p.y+=p.vy;p.life--;
+    if(p.life<=0)lightParticles.splice(i,1);
+  }
+}
+
+function drawLightParticles(){
+  ctx.globalAlpha=0.7;
+  for(var i=0;i<lightParticles.length;i++){
+    var p=lightParticles[i];
+    var alpha=p.life/30;
+    ctx.fillStyle=p.color;
+    ctx.globalAlpha=alpha;
+    ctx.beginPath();ctx.arc(p.x,p.y,2,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// ネオン・グロー効果（軽量版）
+function drawNeonGlow(x,y,r,color){
+  ctx.shadowColor=color;ctx.shadowBlur=15;
+  ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+}
+
+// ギャラクシー背景（スクロール）
+var galaxyOffset=0;
+function drawGalaxyBG(){
+  galaxyOffset=(galaxyOffset+0.5)%H;
+  
+  // グラデーション背景
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#000814');
+  grad.addColorStop(0.5,'#001d3d');
+  grad.addColorStop(1,'#003d82');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  
+  // 星フィールド
+  ctx.fillStyle='#fff';ctx.globalAlpha=0.6;
+  for(var i=0;i<100;i++){
+    var sx=(i*37)%W;
+    var sy=(i*73+galaxyOffset)%H;
+    var size=Math.sin(i)*0.5+1;
+    ctx.fillRect(sx,sy,size,size);
+  }
+  ctx.globalAlpha=1;
+}
+
+// グリッド背景（サイバー感）
+var gridOffset=0;
+function drawGridBG(){
+  gridOffset=(gridOffset+0.3)%20;
+  ctx.strokeStyle='rgba(0,255,200,0.1)';ctx.lineWidth=1;
+  
+  for(var x=0;x<W;x+=20){
+    ctx.beginPath();ctx.moveTo(x-gridOffset,0);ctx.lineTo(x-gridOffset,H);ctx.stroke();
+  }
+  for(var y=0;y<H;y+=20){
+    ctx.beginPath();ctx.moveTo(0,y-gridOffset);ctx.lineTo(W,y-gridOffset);ctx.stroke();
+  }
+}
+
+// 統合背景
+function drawEnhancedBG(){
+  drawGalaxyBG();
+  drawGridBG();
+}
+
+// ════════════════════════════════════════════
+// FEVER SYSTEM - ギャラクシー・フィーバー & スロット
+// ════════════════════════════════════════════
+
+var feverMode=false,feverTime=0,feverDuration=300;
+var slotActive=false,slotReels=[0,0,0],slotSpinning=false;
+
+// ギャラクシー・フィーバー発動
+function triggerGalaxyFever(){
+  feverMode=true;
+  feverTime=feverDuration;
+  addFloat(W/2,H*.3,'🌌 GALAXY FEVER 🌌','#ff00ff',2);
+  SFX.boss();
+  
+  // 画面全体エフェクト
+  for(var i=0;i<50;i++){
+    spawnLightParticle(Math.random()*W,Math.random()*H,'#ff00ff');
+  }
+}
+
+function updateFever(){
+  if(!feverMode)return;
+  feverTime--;
+  if(feverTime<=0){
+    feverMode=false;
+    addFloat(W/2,H*.3,'FEVER END','#00ffff',1.5);
+  }
+}
+
+function drawFeverUI(){
+  if(!feverMode)return;
+  
+  // フィーバーバー
+  ctx.fillStyle='rgba(255,0,255,.3)';
+  ctx.fillRect(W/2-150,10,300,20);
+  ctx.fillStyle='#ff00ff';
+  ctx.fillRect(W/2-150,10,300*(feverTime/feverDuration),20);
+  
+  ctx.fillStyle='#ff00ff';ctx.font='bold 14px Arial';
+  ctx.fillText('FEVER: '+Math.floor(feverTime/60)+'s',W/2-80,28);
+}
+
+// スロット・アップグレード
+function startSlotMachine(){
+  slotActive=true;
+  slotSpinning=true;
+  slotReels=[0,0,0];
+  addFloat(W/2,H*.3,'🎰 SLOT UPGRADE 🎰','#ffd60a',1.8);
+  SFX.sel();
+  
+  // スロット回転
+  var spinTime=0;
+  var spinInterval=setInterval(function(){
+    spinTime++;
+    slotReels[0]=Math.floor(Math.random()*7);
+    slotReels[1]=Math.floor(Math.random()*7);
+    slotReels[2]=Math.floor(Math.random()*7);
+    
+    if(spinTime>60){
+      clearInterval(spinInterval);
+      slotSpinning=false;
+      
+      // 結果判定
+      if(slotReels[0]===slotReels[1]&&slotReels[1]===slotReels[2]){
+        // 大当たり！
+        addFloat(W/2,H*.3,'🎉 JACKPOT! 🎉','#ffd60a',2);
+        SFX.boss();
+        triggerGalaxyFever();
+        GEM+=500;
+      }else{
+        addFloat(W/2,H*.3,'SLOT END','#00ffff',1.5);
+      }
+      slotActive=false;
+    }
+  },50);
+}
+
+function drawSlotUI(){
+  if(!slotActive)return;
+  
+  var symbols=['⚡','🔥','❄','💎','🌟','🎯','💫'];
+  var slotX=W/2-100;
+  
+  ctx.fillStyle='rgba(255,214,10,.2)';
+  ctx.fillRect(slotX,H*.3,200,100);
+  ctx.strokeStyle='#ffd60a';ctx.lineWidth=3;
+  ctx.strokeRect(slotX,H*.3,200,100);
+  
+  for(var i=0;i<3;i++){
+    var x=slotX+30+i*60;
+    ctx.fillStyle='#ffd60a';ctx.font='bold 40px Arial';
+    ctx.fillText(symbols[slotReels[i]],x,H*.3+70);
+  }
+}
+
+// 確変トリガー（敵撃破時）
+function checkFeverTrigger(){
+  if(Math.random()<0.05&&!feverMode){
+    startSlotMachine();
+  }
+}
+
+
+
+
+
+// ════════════════════════════════════════════
 // CYBER PARKOUR - Dedicated Action Engine
 // ════════════════════════════════════════════
 var parkour={
@@ -5915,11 +6109,38 @@ function optimizedDraw(){
   drawBatch.flush();
 }
 
-function optimizedLoop(){
-  optimizedUpdate();
-  optimizedDraw();
-  raf=requestAnimationFrame(optimizedLoop);
+
+// ════════════════════════════════════════════
+// HYPER-OPTIMIZED MAIN LOOP
+// ════════════════════════════════════════════
+function hyperOptimizedLoop(){
+  updateFrameSkip();
+  
+  // 更新処理（毎フレーム）
+  updateLightParticles();
+  updateFever();
+  updateTimers();
+  
+  // 描画処理（フレームスキップ適用）
+  if(renderFrame){
+    // 背景描画
+    drawEnhancedBG();
+    
+    // モード別描画
+    if(parkour.active)parkour.draw();
+    else if(cardBattle.active)cardBattle.draw();
+    else if(rhythm.active)rhythm.draw();
+    else if(fishing.active)fishing.draw();
+    
+    // エフェクト描画
+    drawLightParticles();
+    drawFeverUI();
+    drawSlotUI();
+  }
+  
+  raf=requestAnimationFrame(hyperOptimizedLoop);
 }
+
 
 </script>
 </body>
