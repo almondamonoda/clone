@@ -440,13 +440,144 @@ function checkFeverTrigger(){
 // ════════════════════════════════════════════
 // CYBER PARKOUR - Dedicated Action Engine
 // ════════════════════════════════════════════
-var parkour={
-  active:false,player:{x:W/2,y:H-50,vx:0,vy:0,w:20,h:30,jumping:false,wallSliding:false},
-  obstacles:[],checkpoints:[],level:1,score:0,time:0,
+
+// ════════════════════════════════════════════
+// CYBER PARKOUR v2 - Hardcore Platformer
+// ════════════════════════════════════════════
+var parkourV2={
+  active:false,
+  player:{x:50,y:0,vx:0,vy:0,w:20,h:30,jumping:0,canDoubleJump:true,sliding:false},
+  platforms:[],obstacles:[],score:0,time:0,level:1,
+  camera:{x:0},
   
   start:function(){
     this.active=true;gmode='parkour';
-    this.player={x:W/2,y:H-50,vx:0,vy:0,w:20,h:30,jumping:false,wallSliding:false};
+    this.player={x:50,y:H-100,vx:0,vy:0,w:20,h:30,jumping:0,canDoubleJump:true,sliding:false};
+    this.platforms=[];this.obstacles=[];this.score=0;this.time=0;
+    this.camera={x:0};
+    this.generateLevel();
+    SFX.sel();addFloat(W/2,H*.3,'🏃 PARKOUR START','#00ffff',1.5);
+  },
+  
+  generateLevel:function(){
+    this.platforms=[];this.obstacles=[];
+    for(var i=0;i<20;i++){
+      var px=i*150;
+      var py=H-100-Math.sin(i*0.5)*100;
+      this.platforms.push({x:px,y:py,w:100,h:20,type:'normal'});
+      
+      if(i%3===0){
+        this.obstacles.push({x:px+50,y:py-40,w:30,h:30,type:'spike'});
+      }
+    }
+  },
+  
+  update:function(){
+    if(!this.active)return;
+    var p=this.player;
+    this.time++;
+    
+    // 重力
+    p.vy+=0.6;
+    if(p.vy>20)p.vy=20;
+    
+    // 操作
+    if(keys['a']||keys['ArrowLeft'])p.vx=-8;
+    if(keys['d']||keys['ArrowRight'])p.vx=8;
+    if(!keys['a']&&!keys['ArrowLeft']&&!keys['d']&&!keys['ArrowRight'])p.vx*=0.85;
+    
+    p.x+=p.vx;p.y+=p.vy;
+    
+    // ジャンプ
+    if((keys[' ']||keys['w'])&&this.jumping===0){
+      p.vy=-12;
+      this.jumping=1;
+      SFX.skill();
+    }
+    
+    // 2段ジャンプ
+    if((keys[' ']||keys['w'])&&this.jumping===1&&p.canDoubleJump){
+      p.vy=-10;
+      p.canDoubleJump=false;
+      SFX.skill();
+      for(var i=0;i<10;i++)spawnLightParticle(p.x,p.y,'#00ffff');
+    }
+    
+    // スライディング
+    if((keys['s']||keys['ArrowDown'])&&this.jumping===0){
+      p.sliding=true;
+      p.h=15;
+    }else{
+      p.sliding=false;
+      p.h=30;
+    }
+    
+    // プラットフォーム衝突
+    var onPlatform=false;
+    for(var i=0;i<this.platforms.length;i++){
+      var plat=this.platforms[i];
+      if(p.x+p.w>plat.x&&p.x<plat.x+plat.w&&p.y+p.h>plat.y&&p.y+p.h<plat.y+plat.h+10&&p.vy>=0){
+        p.y=plat.y-p.h;
+        p.vy=0;
+        this.jumping=0;
+        p.canDoubleJump=true;
+        onPlatform=true;
+        this.score+=10;
+      }
+    }
+    
+    // 障害物衝突
+    for(var i=0;i<this.obstacles.length;i++){
+      var obs=this.obstacles[i];
+      if(p.x+p.w>obs.x&&p.x<obs.x+obs.w&&p.y+p.h>obs.y&&p.y<obs.y+obs.h){
+        addFloat(W/2,H*.3,'💥 FAILED','#ff2d55',1.5);
+        SFX.hit();
+        this.active=false;
+      }
+    }
+    
+    // 画面外判定
+    if(p.y>H){
+      addFloat(W/2,H*.3,'💀 FELL','#ff2d55',1.5);
+      this.active=false;
+    }
+    
+    // カメラ追従
+    this.camera.x=Math.max(0,p.x-W*.3);
+  },
+  
+  draw:function(){
+    if(!this.active)return;
+    var p=this.player;
+    
+    // プレイヤー
+    ctx.fillStyle='#00ffff';
+    ctx.fillRect(p.x-this.camera.x,p.y,p.w,p.h);
+    ctx.fillStyle='#fff';ctx.font='bold 10px Arial';
+    ctx.fillText('▶',p.x-this.camera.x+2,p.y+15);
+    
+    // プラットフォーム
+    ctx.fillStyle='#00ff88';
+    for(var i=0;i<this.platforms.length;i++){
+      var plat=this.platforms[i];
+      ctx.fillRect(plat.x-this.camera.x,plat.y,plat.w,plat.h);
+    }
+    
+    // 障害物
+    ctx.fillStyle='#ff2d55';
+    for(var i=0;i<this.obstacles.length;i++){
+      var obs=this.obstacles[i];
+      ctx.fillRect(obs.x-this.camera.x,obs.y,obs.w,obs.h);
+      ctx.fillText('⚠',obs.x-this.camera.x+5,obs.y+20);
+    }
+    
+    // UI
+    ctx.fillStyle='#00ffff';ctx.font='bold 16px Arial';
+    ctx.fillText('DIST: '+Math.floor(p.x/10),20,40);
+    ctx.fillText('SCORE: '+this.score,20,70);
+  }
+};
+
     this.obstacles=[];this.checkpoints=[];this.score=0;this.time=0;
     this.generateLevel(1);
     SFX.sel();addFloat(W/2,H*.3,'🏃 PARKOUR START','#00ffff',1.5);
@@ -546,166 +677,199 @@ var parkour={
 // ════════════════════════════════════════════
 // CARD BATTLE - Dedicated Turn-Based Engine
 // ════════════════════════════════════════════
-var cardBattle={
+
+// ════════════════════════════════════════════
+// CARD BATTLE v2 - Tactical Board Game
+// ════════════════════════════════════════════
+var cardBattleV2={
   active:false,
-  playerHP:100,enemyHP:100,playerEnergy:5,maxEnergy:5,
-  playerHand:[],enemyHand:[],turn:'player',
-  cardLibrary:[
-    {name:'⚡ BOLT',cost:1,dmg:15,color:'#ffd60a'},
-    {name:'🔥 INFERNO',cost:3,dmg:35,color:'#ff2d55'},
-    {name:'❄ FREEZE',cost:2,dmg:20,color:'#00ffff'},
-    {name:'💚 HEAL',cost:2,heal:20,color:'#00ff00'},
+  playerHP:100,enemyHP:100,
+  playerHand:[],enemyHand:[],
+  board:[],turn:0,
+  cardTypes:[
+    {name:'⚡ BOLT',attr:'electric',dmg:15,color:'#ffd60a'},
+    {name:'🔥 INFERNO',attr:'fire',dmg:20,color:'#ff2d55'},
+    {name:'❄ FREEZE',attr:'water',dmg:15,color:'#00ffff'},
+    {name:'🌿 NATURE',attr:'nature',dmg:12,color:'#00ff88'},
   ],
   
   start:function(){
     this.active=true;gmode='cardbattle';
-    this.playerHP=100;this.enemyHP=100;this.playerEnergy=this.maxEnergy;
-    this.playerHand=[];this.enemyHand=[];this.turn='player';
-    this.drawNewHand();
-    SFX.sel();addFloat(W/2,H*.3,'🎴 CARD BATTLE','#c084fc',1.5);
+    this.playerHP=100;this.enemyHP=100;
+    this.playerHand=[];this.enemyHand=[];
+    this.board=[];this.turn=0;
+    this.drawHand('player');
+    this.drawHand('enemy');
+    SFX.sel();addFloat(W/2,H*.3,'🎴 CARD DUEL','#c084fc',1.5);
   },
   
-  drawNewHand:function(){
-    this.playerHand=[];
+  drawHand:function(owner){
+    var hand=owner==='player'?this.playerHand:this.enemyHand;
     for(var i=0;i<3;i++){
-      this.playerHand.push(this.cardLibrary[Math.floor(Math.random()*this.cardLibrary.length)]);
+      hand.push(this.cardTypes[Math.floor(Math.random()*this.cardTypes.length)]);
     }
   },
   
   playCard:function(idx){
     var card=this.playerHand[idx];
-    if(this.playerEnergy<card.cost)return;
-    this.playerEnergy-=card.cost;
-    if(card.dmg)this.enemyHP-=card.dmg;
-    if(card.heal)this.playerHP=Math.min(this.playerHP+card.heal,100);
+    this.board.push({card:card,owner:'player',x:100+idx*120,y:H/2});
     this.playerHand.splice(idx,1);
     addFloat(W/2,H*.3,card.name,'#ffd60a',1.2);
     SFX.skill();
+    setTimeout(()=>this.enemyPlay(),800);
+  },
+  
+  enemyPlay:function(){
+    var card=this.enemyHand[Math.floor(Math.random()*this.enemyHand.length)];
+    this.board.push({card:card,owner:'enemy',x:W-200,y:H/2});
+    addFloat(W/2,H*.2,'ENEMY: '+card.name,'#ff2d55',1.2);
+    this.resolveRound();
+  },
+  
+  resolveRound:function(){
+    if(this.board.length<2)return;
+    var p=this.board[0],e=this.board[1];
+    var dmg=this.calculateDamage(p.card,e.card);
+    
+    if(dmg>0){
+      this.enemyHP-=dmg;
+      addFloat(W/2,H*.5,'+'+dmg,'#ffd60a',1.5);
+    }else if(dmg<0){
+      this.playerHP+=dmg;
+      addFloat(W/2,H*.5,dmg,'#ff2d55',1.5);
+    }
+    
+    this.board=[];
     if(this.enemyHP<=0){
       addFloat(W/2,H*.3,'🎉 VICTORY','#ffd60a',2);
-      SFX.boss();
       this.active=false;
     }else{
-      setTimeout(()=>this.enemyTurn(),500);
+      this.drawHand('player');
     }
   },
   
-  enemyTurn:function(){
-    var card=this.cardLibrary[Math.floor(Math.random()*this.cardLibrary.length)];
-    if(card.dmg)this.playerHP-=card.dmg;
-    addFloat(W/2,H*.2,'ENEMY: '+card.name,'#ff2d55',1.2);
-    SFX.hit();
-    if(this.playerHP<=0){
-      addFloat(W/2,H*.3,'💀 DEFEAT','#ff2d55',2);
-      this.active=false;
-    }else{
-      this.playerEnergy=Math.min(this.playerEnergy+1,this.maxEnergy);
-      this.drawNewHand();
-    }
+  calculateDamage:function(playerCard,enemyCard){
+    var dmg=playerCard.dmg;
+    if(playerCard.attr==='electric'&&enemyCard.attr==='water')dmg*=1.5;
+    if(playerCard.attr==='fire'&&enemyCard.attr==='nature')dmg*=1.5;
+    if(playerCard.attr==='water'&&enemyCard.attr==='fire')dmg*=1.5;
+    if(playerCard.attr==='nature'&&enemyCard.attr==='electric')dmg*=1.5;
+    return Math.floor(dmg);
   },
   
   draw:function(){
     if(!this.active)return;
     
     // HP表示
-    ctx.fillStyle='#c084fc';ctx.font='bold 16px Arial';
-    ctx.fillText('YOU: '+this.playerHP+'/100',20,40);
-    ctx.fillText('ENEMY: '+this.enemyHP+'/100',W-200,40);
+    ctx.fillStyle='#c084fc';ctx.font='bold 18px Arial';
+    ctx.fillText('YOU: '+this.playerHP,20,40);
+    ctx.fillText('ENEMY: '+this.enemyHP,W-200,40);
     
-    // エネルギー表示
-    ctx.fillStyle='#00ffff';ctx.font='12px Arial';
-    ctx.fillText('ENERGY: '+this.playerEnergy+'/'+this.maxEnergy,20,70);
-    
-    // カード表示
+    // 手札表示
+    ctx.fillStyle='#666';ctx.fillRect(0,H-120,W,120);
     for(var i=0;i<this.playerHand.length;i++){
       var card=this.playerHand[i];
       var x=50+i*120;
-      ctx.fillStyle=card.color;
+      ctx.fillStyle=card.color;ctx.globalAlpha=0.7;
       ctx.fillRect(x,H-100,100,80);
-      ctx.fillStyle='#000';ctx.font='bold 12px Arial';
+      ctx.globalAlpha=1;
+      ctx.fillStyle='#000';ctx.font='bold 11px Arial';
       ctx.fillText(card.name,x+5,H-70);
-      ctx.fillText('Cost: '+card.cost,x+5,H-50);
+      ctx.fillText(card.attr,x+5,H-50);
+    }
+    
+    // ボード表示
+    for(var i=0;i<this.board.length;i++){
+      var b=this.board[i];
+      ctx.fillStyle=b.card.color;ctx.globalAlpha=0.8;
+      ctx.fillRect(b.x,b.y,80,60);
+      ctx.globalAlpha=1;
+      ctx.fillStyle='#000';ctx.font='bold 12px Arial';
+      ctx.fillText(b.card.name,b.x+5,b.y+30);
     }
   }
 };
 
 
+
 // ════════════════════════════════════════════
 // RHYTHM SLASH - Dedicated Rhythm Engine
 // ════════════════════════════════════════════
-var rhythm={
-  active:false,notes:[],score:0,combo:0,beat:0,bpm:120,
-  lanes:[{x:W*.25,color:'#ff00ff'},{x:W*.5,color:'#00ffff'},{x:W*.75,color:'#ffd60a'}],
+
+// ════════════════════════════════════════════
+// RHYTHM SLASH v2 - 3D Lane Perspective
+// ════════════════════════════════════════════
+var rhythmV2={
+  active:false,notes:[],score:0,combo:0,beat:0,
+  lanes:[{x:W*.3,color:'#ff00ff'},{x:W*.5,color:'#00ffff'},{x:W*.7,color:'#ffd60a'}],
   
   start:function(){
     this.active=true;gmode='rhythm';
     this.notes=[];this.score=0;this.combo=0;this.beat=0;
     this.generateNotes();
-    SFX.sel();addFloat(W/2,H*.3,'🎵 RHYTHM SLASH','#ff00ff',1.5);
+    SFX.sel();addFloat(W/2,H*.3,'🎵 RHYTHM START','#ff00ff',1.5);
   },
   
   generateNotes:function(){
-    var noteCount=Math.floor(this.bpm*2);
-    for(var i=0;i<noteCount;i++){
-      this.notes.push({
-        lane:Math.floor(Math.random()*this.lanes.length),
-        time:i*10,y:0,hit:false
-      });
+    for(var i=0;i<100;i++){
+      this.notes.push({lane:Math.floor(Math.random()*3),time:i*30+100,hit:false});
     }
   },
   
   update:function(){
     if(!this.active)return;
-    this.beat++;
-    
+    this.beat+=2;
     for(var i=0;i<this.notes.length;i++){
-      var note=this.notes[i];
-      note.y=this.beat-note.time;
-      if(note.y>H&&!note.hit)this.combo=0;
+      var n=this.notes[i];
+      if(!n.hit&&this.beat-n.time>H-50){
+        this.combo=0;
+      }
     }
   },
   
   hitNote:function(lane){
-    for(var i=this.notes.length-1;i>=0;i--){
-      var note=this.notes[i];
-      if(note.lane===lane&&!note.hit&&Math.abs(note.y-80)<20){
-        note.hit=true;
-        this.score+=100*(this.combo+1);
-        this.combo++;
-        addFloat(this.lanes[lane].x,H*.7-note.y,'PERFECT!','#ffd60a',1.2);
+    for(var i=0;i<this.notes.length;i++){
+      var n=this.notes[i];
+      if(n.lane===lane&&!n.hit&&Math.abs(this.beat-n.time-(H-100))<30){
+        n.hit=true;
+        this.score+=100;this.combo++;
+        addFloat(this.lanes[lane].x,H-100,'PERFECT!','#ffd60a',1.2);
         SFX.skill();
-        return true;
+        return;
       }
     }
     this.combo=0;
-    return false;
   },
   
   draw:function(){
     if(!this.active)return;
     
-    // ジャッジメントライン
-    ctx.strokeStyle='#fff';ctx.lineWidth=3;
-    ctx.beginPath();ctx.moveTo(0,H*.7);ctx.lineTo(W,H*.7);ctx.stroke();
-    
-    // レーン
-    for(var i=0;i<this.lanes.length;i++){
-      var lane=this.lanes[i];
-      ctx.strokeStyle=lane.color;ctx.lineWidth=4;
-      ctx.strokeRect(lane.x-40,H*.6,80,150);
+    // 3D風レーン
+    ctx.strokeStyle='rgba(255,255,255,0.2)';
+    for(var i=0;i<4;i++){
+      var x=W*.2+i*W*.2;
+      ctx.beginPath();ctx.moveTo(W/2,100);ctx.lineTo(x,H);ctx.stroke();
     }
+    
+    // 判定ライン
+    ctx.strokeStyle='#fff';ctx.lineWidth=5;
+    ctx.beginPath();ctx.moveTo(W*.2,H-100);ctx.lineTo(W*.8,H-100);ctx.stroke();
     
     // ノーツ
     for(var i=0;i<this.notes.length;i++){
-      var note=this.notes[i];
-      if(note.y>0&&note.y<H){
-        var lane=this.lanes[note.lane];
-        ctx.fillStyle=lane.color;
-        ctx.fillRect(lane.x-30,H*.7-note.y,60,20);
+      var n=this.notes[i];
+      if(n.hit)continue;
+      var progress=(this.beat-n.time)/H;
+      if(progress>0&&progress<1.2){
+        var y=100+progress*(H-100);
+        var laneX=W/2+(this.lanes[n.lane].x-W/2)*progress;
+        var size=10+progress*40;
+        ctx.fillStyle=this.lanes[n.lane].color;
+        ctx.fillRect(laneX-size/2,y,size,10);
       }
     }
     
-    // スコア
+    // UI
     ctx.fillStyle='#ff00ff';ctx.font='bold 20px Arial';
     ctx.fillText('SCORE: '+this.score,20,40);
     ctx.fillText('COMBO: '+this.combo,20,70);
@@ -713,70 +877,80 @@ var rhythm={
 };
 
 
+
 // ════════════════════════════════════════════
 // CYBER FISHING - Dedicated Fishing Engine
 // ════════════════════════════════════════════
-var fishing={
-  active:false,rodX:W/2,tension:0,caught:0,time:0,
-  fishTypes:[
-    {name:'🐠 DATA FISH',value:10,rarity:1},
-    {name:'🐟 CARP',value:25,rarity:2},
-    {name:'🦈 SHARK',value:50,rarity:3},
-  ],
+
+// ════════════════════════════════════════════
+// CYBER FISHING v2 - Battle Fishing
+// ════════════════════════════════════════════
+var fishingV2={
+  active:false,state:'waiting',tension:0,distance:100,fishType:null,
   
   start:function(){
     this.active=true;gmode='fishing';
-    this.rodX=W/2;this.tension=0;this.caught=0;this.time=0;
-    SFX.sel();addFloat(W/2,H*.3,'🎣 FISHING START','#00c8ff',1.5);
+    this.state='waiting';this.tension=0;this.distance=100;
+    SFX.sel();addFloat(W/2,H*.3,'🎣 CAST LINE','#00c8ff',1.5);
   },
   
   update:function(){
     if(!this.active)return;
-    this.time++;
     
-    // マウス追従
-    if(mouseX)this.rodX=mouseX;
-    
-    // ランダムに魚がかかる
-    if(Math.random()<0.01){
-      this.tension=Math.min(100,this.tension+Math.random()*40);
-    }
-    
-    // 緊張度減衰
-    this.tension=Math.max(0,this.tension-0.3);
-    
-    // 釣り上げ
-    if(this.tension>100){
-      var fish=this.fishTypes[Math.floor(Math.random()*this.fishTypes.length)];
-      this.caught++;
-      GEM+=fish.value;
-      addFloat(W/2,H*.3,fish.name+' +'+fish.value+'💎','#ffd60a',1.5);
-      SFX.upg();
-      this.tension=0;
+    if(this.state==='waiting'){
+      if(Math.random()<0.01){
+        this.state='hooked';
+        this.tension=30;
+        addFloat(W/2,H*.3,'❗ HIT!','#ff2d55',1.5);
+        SFX.upg();
+      }
+    }else if(this.state==='hooked'){
+      if(keys[' ']){
+        this.tension+=1.5;
+        this.distance-=0.5;
+      }else{
+        this.tension-=0.8;
+        this.distance+=0.2;
+      }
+      
+      if(this.tension>100||this.tension<0){
+        this.state='waiting';
+        addFloat(W/2,H*.3,'💨 LOST','#666',1.5);
+      }else if(this.distance<=0){
+        this.state='waiting';
+        GEM+=100;
+        addFloat(W/2,H*.3,'🐟 CAUGHT! +100💎','#ffd60a',2);
+        SFX.boss();
+      }
     }
   },
   
   draw:function(){
     if(!this.active)return;
     
-    // 竿
-    ctx.strokeStyle='#00c8ff';ctx.lineWidth=4;
-    ctx.beginPath();ctx.moveTo(this.rodX,H*.2);ctx.lineTo(this.rodX-50,H*.6);ctx.stroke();
+    // 水面
+    ctx.fillStyle='rgba(0,100,255,0.2)';
+    ctx.fillRect(0,H/2,W,H/2);
     
-    // 緊張度バー
-    ctx.fillStyle='rgba(0,200,255,.2)';
-    ctx.fillRect(W/2-150,50,300,30);
-    ctx.strokeStyle='#00c8ff';ctx.lineWidth=2;ctx.strokeRect(W/2-150,50,300,30);
-    
-    ctx.fillStyle='#00c8ff';
-    ctx.fillRect(W/2-150,50,this.tension*3,30);
-    
-    // 釣った数
-    ctx.fillStyle='#ffd60a';ctx.font='bold 18px Arial';
-    ctx.fillText('CAUGHT: '+this.caught,20,40);
-    ctx.fillText('TIME: '+Math.floor(this.time/60)+'s',W-150,40);
+    if(this.state==='waiting'){
+      ctx.fillStyle='#fff';ctx.font='20px Arial';
+      ctx.fillText('WAITING FOR FISH...',W/2-100,H/2-50);
+    }else{
+      // テンションバー
+      ctx.fillStyle='#333';ctx.fillRect(W/2-150,H-100,300,20);
+      var color=this.tension>80?'#ff2d55':(this.tension<20?'#ffd60a':'#00ff88');
+      ctx.fillStyle=color;ctx.fillRect(W/2-150,H-100,this.tension*3,20);
+      ctx.fillText('TENSION',W/2-50,H-110);
+      
+      // 距離
+      ctx.fillStyle='#fff';ctx.fillText('DISTANCE: '+Math.floor(this.distance)+'m',W/2-80,H/2);
+      
+      ctx.font='14px Arial';
+      ctx.fillText('HOLD [SPACE] TO REEL IN!',W/2-100,H-50);
+    }
   }
 };
+
 
 
   }
@@ -6094,18 +6268,18 @@ console.log('✨ 5つのレルム、5段階ボス進化、リアルタイムイ�
 // ════════════════════════════════════════════
 function optimizedUpdate(){
   updateTimers();
-  if(parkour.active)parkour.update();
-  else if(cardBattle.active)cardBattle.update();
-  else if(rhythm.active)rhythm.update();
-  else if(fishing.active)fishing.update();
+  if(parkourV2.active)parkourV2.update();
+  else if(cardBattleV2.active)cardBattleV2.update();
+  else if(rhythmV2.active)rhythmV2.update();
+  else if(fishingV2.active)fishingV2.update();
 }
 
 function optimizedDraw(){
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
-  if(parkour.active)parkour.draw();
-  else if(cardBattle.active)cardBattle.draw();
-  else if(rhythm.active)rhythm.draw();
-  else if(fishing.active)fishing.draw();
+  if(parkourV2.active)parkourV2.draw();
+  else if(cardBattleV2.active)cardBattleV2.draw();
+  else if(rhythmV2.active)rhythmV2.draw();
+  else if(fishingV2.active)fishingV2.draw();
   drawBatch.flush();
 }
 
@@ -6127,10 +6301,10 @@ function hyperOptimizedLoop(){
     drawEnhancedBG();
     
     // モード別描画
-    if(parkour.active)parkour.draw();
-    else if(cardBattle.active)cardBattle.draw();
-    else if(rhythm.active)rhythm.draw();
-    else if(fishing.active)fishing.draw();
+    if(parkourV2.active)parkourV2.draw();
+    else if(cardBattleV2.active)cardBattleV2.draw();
+    else if(rhythmV2.active)rhythmV2.draw();
+    else if(fishingV2.active)fishingV2.draw();
     
     // エフェクト描画
     drawLightParticles();
